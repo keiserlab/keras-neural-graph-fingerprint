@@ -12,13 +12,13 @@ def tensorise_smiles(smiles, max_degrees=5, max_atoms=100):
         smiles: a list of smiles representations
 
     Returns:
-        atoms, bonds: An atom np.array of size (molecules, max_atoms, atom_features)
-            and a bonds np.array of size (molecules, max_atoms, max_neighbours)
-
+        list of np.array:
+           - atoms: An atom feature np.array of size `(molecules, max_atoms, atom_features)`
+           - bonds: A bonds np.array of size `(molecules, max_atoms, max_neighbours)`
+           - edges: A connectivity array of size `(molecules, max_atoms, max_neighbours, bond_features)`
     TODO:
         * Auto-option for max_degrees and max_atoms
         * Arguments for sparse vector encoding
-        * Represent bond info better
 
     '''
 
@@ -28,8 +28,9 @@ def tensorise_smiles(smiles, max_degrees=5, max_atoms=100):
     n_bond_features = features.num_bond_features()
 
     # preallocate atom tensor with 0's and bond tensor with -1 (because of 0 index)
-    atom_tensor = np.zeros((n, max_atoms, n_atom_features+n_bond_features))
-    bond_tensor = -np.ones((n, max_atoms, max_degrees), dtype=int)
+    atom_tensor = np.zeros((n, max_atoms, n_atom_features))
+    bond_tensor = np.zeros((n, max_atoms, max_degrees, n_bond_features))
+    edge_tensor = -np.ones((n, max_atoms, max_degrees), dtype=int)
 
     for mol_ix, s in enumerate(smiles):
 
@@ -59,19 +60,23 @@ def tensorise_smiles(smiles, max_degrees=5, max_atoms=100):
             a1_ix = rdkit_ix_lookup[bond.GetBeginAtom().GetIdx()]
             a2_ix = rdkit_ix_lookup[bond.GetEndAtom().GetIdx()]            
 
+            # lookup how many neighbours are encoded yet
+            a1_neigh = len(connectivity_mat[a1_ix])
+            a2_neigh = len(connectivity_mat[a2_ix])
+
+            # store bond features
+            bond_features = np.array(features.bond_features(bond), dtype=int)
+            bond_tensor[mol_ix, a1_ix, a1_neigh, :] = bond_features
+            bond_tensor[mol_ix, a2_ix, a2_neigh, :] = bond_features
+
             #add to connectivity matrix
             connectivity_mat[a1_ix].append(a2_ix)
             connectivity_mat[a2_ix].append(a1_ix)
-
-            # For now, just sum the bond features of the neighbours and append to atom features
-            bond_features = np.array(features.bond_features(bond), dtype=int)
-            atom_tensor[mol_ix, a1_ix, -n_bond_features :] += bond_features
-            atom_tensor[mol_ix, a2_ix, -n_bond_features :] += bond_features
 
         #store connectivity matrix
         for a1_ix, neighbours in enumerate(connectivity_mat):
             degree = len(neighbours)
             assert degree <= max_degrees, 'too many neighbours for atom'
-            bond_tensor[mol_ix, a1_ix, : degree] = neighbours
+            edge_tensor[mol_ix, a1_ix, : degree] = neighbours
 
-    return atom_tensor, bond_tensor
+    return atom_tensor, bond_tensor, edge_tensor
