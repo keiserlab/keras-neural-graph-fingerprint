@@ -1,6 +1,6 @@
 # Imported from https://github.com/HIPS/neural-fingerprint/blob/master/neuralfingerprint/features.py
 #           and https://github.com/HIPS/neural-fingerprint/blob/master/neuralfingerprint/util.py
-import autograd.numpy as np
+import numpy as np
 from rdkit import Chem
 
 def one_of_k_encoding(x, allowable_set):
