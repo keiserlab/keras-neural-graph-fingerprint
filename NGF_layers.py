@@ -1,11 +1,35 @@
 from __future__ import print_function
-
+import inspect
 import numpy as np
 
 from keras import layers
 import keras.backend as K
 
 import theano
+
+def filter_func_args(fn, args, invalid_args=[]):
+    '''Separate a dict of arguments into one that a function takes, and the rest
+
+    # Arguments:
+        fn: arbitrary function
+        args: dict of arguments to separate
+        invalid_args: list of arguments that will be removed from args
+
+    # Returns:
+        fn_args, other_args: tuple of separated arguments, ones that the function
+            takes, and the others (minus `invalid_args`)
+    '''
+
+    fn_valid_args = inspect.getargspec(fn)[0]
+    fn_args = {}
+    other_args = {}
+    for arg, val in args.iteritems():
+        if not arg in invalid_args:
+            if arg in fn_valid_args:
+                fn_args[arg] = val
+            else:
+                other_args[arg] = val
+    return fn_args, other_args
 
 # TODO: Rewrite this function to Keras and drop theano dependency
 def parallel_gather(references, indices):
@@ -35,6 +59,13 @@ class NeuralGraphHidden(layers.Layer):
     # Arguments
         conv_width: The width of the convolution. This determines the size of 
             the feature vectors that are returned for each atom.
+        dense_layer_type: This layer uses internal keras layers for the actual 
+            parameter training and activation. A single layer is instantiated for
+            each degree. Set the type trough this argument (should be a valid
+            `keras.layers.Layer` class).
+            Default: `keras.layers.Dense`
+        kwargs: Other arguments to pass to the inner_dense layer
+            (see `dense_layer_type`)
 
     # Input shape
         List of Atom and edge tensors of shape:
@@ -49,13 +80,15 @@ class NeuralGraphHidden(layers.Layer):
     # References
         - [Convolutional Networks on Graphs for Learning Molecular Fingerprints](https://arxiv.org/abs/1509.09292)
 
-    # TODO
-        - Add options for dense layer
-        - Add naming for internal layers
     '''
 
-    def __init__(self, conv_width, **kwargs):
+    def __init__(self, conv_width, dense_layer_type=layers.Dense, **kwargs):
         self.conv_width = conv_width
+        self.dense_layer_kwargs, kwargs = filter_func_args(dense_layer_type.__init__,
+            kwargs, invalid_args=['self', 'output_dim', 'input_dim'])
+        self.dense_layer_type = dense_layer_type
+
+
         super(NeuralGraphHidden, self).__init__(**kwargs)
 
     def build(self, inputs_shape):
@@ -70,7 +103,14 @@ class NeuralGraphHidden(layers.Layer):
 
         # Add the dense layers (that contain trainable params)
         # (or each degree we convolve with a different weight matrix)
-        self.dense_layers = [layers.Dense(self.conv_width) for _ in range(max_degree)]
+        self.dense_layers = []
+        self.trainable_weights = []
+        for degree in range(max_degree):
+            dense_layer = self.dense_layer_type(self.conv_width,
+                        name='{0}-dense-degree-{1}'.format(self.name, degree),
+                        **self.dense_layer_kwargs)
+            self.dense_layers.append(dense_layer)
+                
         #TODO: Build dense_layers here in NGF build function
         #TODO: Investigate trainable params
 
@@ -158,6 +198,13 @@ class NeuralGraphOutput(layers.Layer):
 
     # Arguments
         fp_length: The length of the fingerprints returned.
+        dense_layer_type: This layer uses an internal keras layer for the actual 
+            parameter training and activation. Set the type trough this argument
+            (should be a valid `keras.layers.Layer` class).
+            Default: `keras.layers.Dense`
+        kwargs: Other arguments to pass to the inner_dense layer
+            (see `dense_layer_type`)
+
 
     # Input shape
         List of Atom and edge tensors of shape:
@@ -171,14 +218,16 @@ class NeuralGraphOutput(layers.Layer):
 
     # References
         - [Convolutional Networks on Graphs for Learning Molecular Fingerprints](https://arxiv.org/abs/1509.09292)
-
-    # TODO
-        - Add options for dense layer
-        - Add naming for internal layers            
+   
     '''
 
-    def __init__(self, fp_length, **kwargs):
+    def __init__(self, fp_length, dense_layer_type=layers.Dense, **kwargs):
         self.fp_length = fp_length
+
+        self.dense_layer_kwargs, kwargs = filter_func_args(dense_layer_type.__init__,
+            kwargs, invalid_args=['self', 'output_dim', 'input_dim'])
+        self.dense_layer_type = dense_layer_type
+
         super(NeuralGraphOutput, self).__init__(**kwargs)
 
     def build(self, inputs_shape):
@@ -190,9 +239,10 @@ class NeuralGraphOutput(layers.Layer):
         max_degree = edges_shape[2]
 
         # Add the dense layer that contains the trainable parameters
-        self.dense_layer = layers.Dense(self.fp_length)
+        self.dense_layer = layers.Dense(self.fp_length,
+            name='{0}-dense'.format(self.name),
+            **self.dense_layer_kwargs)
         #TODO: Build dense_layer here in NGF build function
-
 
     def call(self, inputs, mask=None):
         atoms, bonds, edges = inputs

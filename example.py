@@ -35,13 +35,13 @@ bonds = Input(name='bond_inputs', shape=(max_atoms, max_degree, num_bond_feature
 edges = Input(name='edge_inputs', shape=(max_atoms, max_degree), dtype='int32')
 
 # Define the convoluted atom feature layers
-atoms1 = NeuralGraphHidden(conv_width)([atoms0, bonds, edges])
-atoms2 = NeuralGraphHidden(conv_width)([atoms1, bonds, edges])
+atoms1 = NeuralGraphHidden(conv_width, activation='relu', bias=False)([atoms0, bonds, edges])
+atoms2 = NeuralGraphHidden(conv_width, activation='relu', bias=False)([atoms1, bonds, edges])
 
 # Define the outputs of each (convoluted) atom featuer layer to fingerprint
-fp_out0 = NeuralGraphOutput(fp_length)([atoms0, bonds, edges])
-fp_out1 = NeuralGraphOutput(fp_length)([atoms1, bonds, edges])
-fp_out2 = NeuralGraphOutput(fp_length)([atoms2, bonds, edges])
+fp_out0 = NeuralGraphOutput(fp_length, activation='softmax')([atoms0, bonds, edges])
+fp_out1 = NeuralGraphOutput(fp_length, activation='softmax')([atoms1, bonds, edges])
+fp_out2 = NeuralGraphOutput(fp_length, activation='softmax')([atoms2, bonds, edges])
 
 
 # Sum outputs to obtain fingerprint
