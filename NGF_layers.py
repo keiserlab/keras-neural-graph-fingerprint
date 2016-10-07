@@ -272,7 +272,7 @@ class NeuralGraphOutput(layers.Layer):
                                 )
 
         # Build the TimeDistributed layer (which will build the Dense layer)
-        self.dense_3D_layer.build((None, max_atoms, num_atom_features))
+        self.dense_3D_layer.build((None, max_atoms, num_atom_features+num_bond_features))
 
         # Store dense_3D_layer and it's weights
         self.trainable_weights = self.dense_3D_layer.trainable_weights
@@ -281,6 +281,12 @@ class NeuralGraphOutput(layers.Layer):
     def call(self, inputs, mask=None):
         atoms, bonds, edges = inputs
 
+        # Import dimensions
+        num_samples = atoms._keras_shape[0]
+        max_atoms = atoms._keras_shape[1]
+        num_atom_features = atoms._keras_shape[-1]
+        num_bond_features = bonds._keras_shape[-1]
+
         # Create a matrix that stores for each atom, the degree it is, use it 
         #   to create a general atom mask (unused atoms are 0 padded)
         # We have to use the edge vector for this, because in theory, a convolution
@@ -288,8 +294,15 @@ class NeuralGraphOutput(layers.Layer):
         atom_degrees = K.sum(K.not_equal(edges, -1), axis=-1, keepdims=True)
         general_atom_mask = K.not_equal(atom_degrees, 0)
 
+        # Sum the edge features for each atom
+        summed_bond_features = K.sum(bonds, axis=-2)
+
+        # Concatenate the summed atom and bond features
+        atoms_bonds_features = K.concatenate([atoms, summed_bond_features], axis=-1)
+
         # Compute fingerprint
-        fingerprint_out_unmasked = self.dense_3D_layer(atoms)
+        atoms_bonds_features._keras_shape = (None, max_atoms, num_atom_features+num_bond_features)
+        fingerprint_out_unmasked = self.dense_3D_layer(atoms_bonds_features)
 
         # Do explicit masking because TimeDistributed does not support masking
         fingerprint_out_masked = fingerprint_out_unmasked * general_atom_mask
