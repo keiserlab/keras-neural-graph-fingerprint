@@ -95,24 +95,41 @@ class NeuralGraphHidden(layers.Layer):
 
         # Import dimensions
         atoms_shape, bonds_shape, edges_shape = inputs_shape
+        num_samples = atoms_shape[0]
         max_atoms = atoms_shape[1]
-        num_features = atoms_shape[2]
+        num_atom_features = atoms_shape[-1]
+        num_bond_features = bonds_shape[-1]
+
         max_degree = edges_shape[2]
 
         self.max_degree = max_degree
 
         # Add the dense layers (that contain trainable params)
-        # (or each degree we convolve with a different weight matrix)
-        self.dense_layers = []
+        #   (for each degree we convolve with a different weight matrix)
         self.trainable_weights = []
+        self.dense_3D_layers = []
         for degree in range(max_degree):
-            dense_layer = self.dense_layer_type(self.conv_width,
-                        name='{0}-dense-degree-{1}'.format(self.name, degree),
-                        **self.dense_layer_kwargs)
-            self.dense_layers.append(dense_layer)
-                
-        #TODO: Build dense_layers here in NGF build function
-        #TODO: Investigate trainable params
+
+            # Initialise dense layer with specified params (kwargs) and name
+            dense_layer = self.dense_layer_type(
+                            self.conv_width,
+                            name='{0}_inner_Dense_{1}'.format(self.name, degree),
+                            **self.dense_layer_kwargs
+                          )
+
+            # Initialise TimeDistributed layer wrapper in order to parallelise
+            #   dense layer across atoms
+            dense_3D_layer = layers.TimeDistributed(
+                                dense_layer, 
+                                name='{0}_inner_TimeDist_{1}'.format(self.name, degree)
+                             )
+
+            # Build the TimeDistributed layer (which will build the Dense layer)
+            dense_3D_layer.build((None, max_atoms, num_atom_features+num_bond_features))
+
+            # Store dense_3D_layer and it's weights
+            self.dense_3D_layers.append(dense_3D_layer)
+            self.trainable_weights += dense_3D_layer.trainable_weights
 
     def call(self, inputs, mask=None):
         atoms, bonds, edges = inputs
@@ -120,8 +137,8 @@ class NeuralGraphHidden(layers.Layer):
         # Import dimensions
         num_samples = atoms._keras_shape[0]
         max_atoms = atoms._keras_shape[1]
-        atom_features = atoms._keras_shape[-1]
-        bond_features = bonds._keras_shape[-1]
+        num_atom_features = atoms._keras_shape[-1]
+        num_bond_features = bonds._keras_shape[-1]
 
         # Create a matrix that stores for each atom, the degree it is
         atom_degrees = K.sum(K.not_equal(edges, -1), axis=-1, keepdims=True)
@@ -156,8 +173,8 @@ class NeuralGraphHidden(layers.Layer):
             # Multiply with hidden merge layer
             #   (use time Distributed because we are dealing with 2D input/3D for batches)
             # Add keras shape to let keras now the dimensions
-            summed_features._keras_shape = (num_samples, max_atoms, atom_features+bond_features)
-            new_unmasked_features = layers.TimeDistributed(self.dense_layers[degree])(summed_features)
+            summed_features._keras_shape = (None, max_atoms, num_atom_features+num_bond_features)
+            new_unmasked_features = self.dense_3D_layers[degree](summed_features)
 
             # Do explicit masking because TimeDistributed does not support masking
             new_masked_features = new_unmasked_features * atom_masks_this_degree
@@ -235,14 +252,31 @@ class NeuralGraphOutput(layers.Layer):
         # Import dimensions
         atoms_shape, bonds_shape, edges_shape = inputs_shape
         max_atoms = atoms_shape[1]
-        num_features = atoms_shape[2]
         max_degree = edges_shape[2]
+        num_atom_features = atoms_shape[-1]
+        num_bond_features = bonds_shape[-1]
 
         # Add the dense layer that contains the trainable parameters
-        self.dense_layer = layers.Dense(self.fp_length,
-            name='{0}-dense'.format(self.name),
-            **self.dense_layer_kwargs)
-        #TODO: Build dense_layer here in NGF build function
+        # Initialise dense layer with specified params (kwargs) and name
+        dense_layer = self.dense_layer_type(
+                                    self.fp_length,
+                                    name='{0}_inner_Dense'.format(self.name),
+                                    **self.dense_layer_kwargs
+                                )
+
+        # Initialise TimeDistributed layer wrapper in order to parallelise
+        #   dense layer across atoms
+        self.dense_3D_layer = layers.TimeDistributed(
+                                    dense_layer, 
+                                    name='{0}_inner_TimeDist'.format(self.name),
+                                )
+
+        # Build the TimeDistributed layer (which will build the Dense layer)
+        self.dense_3D_layer.build((None, max_atoms, num_atom_features))
+
+        # Store dense_3D_layer and it's weights
+        self.trainable_weights = self.dense_3D_layer.trainable_weights
+
 
     def call(self, inputs, mask=None):
         atoms, bonds, edges = inputs
@@ -255,7 +289,7 @@ class NeuralGraphOutput(layers.Layer):
         general_atom_mask = K.not_equal(atom_degrees, 0)
 
         # Compute fingerprint
-        fingerprint_out_unmasked = layers.TimeDistributed(self.dense_layer)(atoms)
+        fingerprint_out_unmasked = self.dense_3D_layer(atoms)
 
         # Do explicit masking because TimeDistributed does not support masking
         fingerprint_out_masked = fingerprint_out_unmasked * general_atom_mask
