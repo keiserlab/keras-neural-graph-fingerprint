@@ -99,6 +99,10 @@ and returns the fingerprint output for that layer. According to the [original pa
 the fingerprints of all layers need to be summed. But these are neural nets, so
 feel free to play around with the architectures!
 
+## NeuralGraph models
+For convienience, two builder functions are included that can build a variety
+of Neural Graph models by specifiying it's parameters. See [NGF_models.py](NGF_models.py)
+
 The example in [example.py](example.py) should help you along the way.
 
 ## Dependencies
