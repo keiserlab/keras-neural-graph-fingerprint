@@ -197,6 +197,18 @@ class NeuralGraphHidden(layers.Layer):
 
         return (num_samples, max_atoms, self.conv_width)
 
+    @classmethod
+    def from_config(cls, config):
+        conv_width = config.pop('conv_width')
+        layer = cls(conv_width, **config)
+        return layer
+
+    def get_config(self):
+        config = super(NeuralGraphHidden, self).get_config()
+        config['conv_width'] = self.conv_width
+        config.update(self.dense_layer_kwargs)
+        return config
+
 
 class NeuralGraphOutput(layers.Layer):
     ''' Output Convolutional layer in a Neural Graph (as in Duvenaud et. al.,
@@ -322,3 +334,15 @@ class NeuralGraphOutput(layers.Layer):
         max_degree = edges_shape[2]
 
         return (num_samples, self.fp_length)
+
+    @classmethod
+    def from_config(cls, config):
+        fp_length = config.pop('fp_length')
+        layer = cls(fp_length, **config)
+        return layer
+
+    def get_config(self):
+        config = super(NeuralGraphOutput, self).get_config()
+        config['fp_length'] = self.fp_length
+        config.update(self.dense_layer_kwargs)
+        return config

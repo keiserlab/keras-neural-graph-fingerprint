@@ -101,9 +101,14 @@ feel free to play around with the architectures!
 
 ## NeuralGraph models
 For convienience, two builder functions are included that can build a variety
-of Neural Graph models by specifiying it's parameters. See [NGF/models.py](NGF/models.py)
+of Neural Graph models by specifiying it's parameters. See [NGF/models.py](NGF/models.py).
 
 The example in [example.py](example.py) should help you along the way.
+
+You can store and load the trained models. Make sure to specify the custom classes:
+```python
+model = load_model('model.h5', custom_objects={'NeuralGraphHidden':NeuralGraphHidden, 'NeuralGraphOutput':NeuralGraphOutput})
+```
 
 ## Dependencies
 - **Rdkit** This dependency is nescecairy to convert molecules into tensor 
