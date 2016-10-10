@@ -17,6 +17,9 @@ def padaxis(array, new_size, axis, pad_value=0, pad_right=True):
         pad_value: pad value, 
         pad_right: boolean, pad on the right or left side
 
+    # Returns:
+        padded_array: np.array
+
     '''
     add_size = new_size - array.shape[axis]
     assert add_size >= 0, 'Cannot pad dimension {0} of size {1} to smaller size {2}'.format(axis, array.shape[axis], new_size)

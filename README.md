@@ -87,7 +87,7 @@ glance, the tensor implementation seems to perform reasonably fast (check out
 [the example](example.py)). 
 
 ## NeuralGraph layers
-The two workhorses are defined in [NGF-layers.py](NGF-layers.py).
+The two workhorses are defined in [NGF/layers.py](NGF/layers.py).
 
 `NeuralGraphHidden` takes a set of molecules (represented by `[atoms, bonds, edges]`), 
 and returns the convolved feature vectors of the higher layers. Only the feature
@@ -101,7 +101,7 @@ feel free to play around with the architectures!
 
 ## NeuralGraph models
 For convienience, two builder functions are included that can build a variety
-of Neural Graph models by specifiying it's parameters. See [NGF_models.py](NGF_models.py)
+of Neural Graph models by specifiying it's parameters. See [NGF/models.py](NGF/models.py)
 
 The example in [example.py](example.py) should help you along the way.
 

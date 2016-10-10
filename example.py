@@ -4,9 +4,9 @@ from keras.layers import Input, merge, Dense
 from keras import models
 
 import utils
-from preprocessing import tensorise_smiles
-from NGF_layers import NeuralGraphHidden, NeuralGraphOutput
-from NGF_models import build_graph_conv_model
+from NGF.preprocessing import tensorise_smiles
+from NGF.layers import NeuralGraphHidden, NeuralGraphOutput
+from NGF.models import build_graph_conv_model
 
 
 # ================================ Load the data ===============================

@@ -3,7 +3,7 @@ from __future__ import division, print_function, absolute_import
 from keras.layers import Input, merge, Dense, TimeDistributed, Dropout, BatchNormalization
 from keras import models
 
-from NGF_layers import NeuralGraphHidden, NeuralGraphOutput
+from .layers import NeuralGraphHidden, NeuralGraphOutput
 
 def build_graph_conv_model(max_atoms, num_atom_features, num_bond_features,
 								max_degree, learning_type, 
