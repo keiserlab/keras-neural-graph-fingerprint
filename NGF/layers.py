@@ -1,6 +1,5 @@
 from __future__ import print_function
 import inspect
-import numpy as np
 
 from keras import layers
 from keras.utils.layer_utils import layer_from_config
@@ -444,3 +443,40 @@ class NeuralGraphOutput(layers.Layer):
         config['inner_layer_config'] = { 'config': inner_layer.get_config(),
                                         'class_name': inner_layer.__class__.__name__}
         return config
+
+class AtomwiseDropout(layers.Layer):
+    ''' Performs dropout over an atom feature vector where each atom will get
+    the same dropout vector.
+
+    Eg. With an input of `(batch_n, max_atoms, atom_features)`, a dropout mask of
+    `(batch_n, atom_features)` will be generated, and repeated `max_atoms` times
+
+    # Arguments
+        p: float between 0 and 1. Fraction of the input units to drop.
+
+    '''
+    def __init__(self, p, **kwargs):
+        self.dropout_layer = layers.Dropout(p)
+        self.uses_learning_phase = self.dropout_layer.uses_learning_phase
+        self.supports_masking = True
+        super(AtomwiseDropout, self).__init__(**kwargs)
+
+    def _get_noise_shape(self, x):
+        return None
+
+    def call(self, inputs, mask=None):
+        # Import dimensions
+        _, max_atoms, num_atom_features = inputs._keras_shape
+
+        # By [farizrahman4u](https://github.com/fchollet/keras/issues/3995)
+        ones = layers.Lambda(lambda x: (x * 0 + 1)[:, 0, :], output_shape=lambda s: (s[0], s[2]))(inputs)
+        dropped = self.dropout_layer(ones)
+        dropped = layers.RepeatVector(max_atoms)(dropped)
+        return layers.Lambda(lambda x: x[0] * x[1], output_shape=lambda s: s[0])([inputs, dropped])
+
+    def get_config(self):
+        config = super(AtomwiseDropout, self).get_config()
+        config['p'] = self.dropout_layer.p
+        return config
+
+#TODO: Add GraphWiseDropout layer, that creates masks for each degree separately.

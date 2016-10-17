@@ -4,7 +4,7 @@ from keras.regularizers import l1l2
 from keras.layers import Input, merge, Dense, Dropout, BatchNormalization
 from keras import models
 
-from .layers import NeuralGraphHidden, NeuralGraphOutput
+from .layers import NeuralGraphHidden, NeuralGraphOutput, AtomwiseDropout
 
 def build_graph_conv_model(max_atoms, num_atom_features, num_bond_features,
 								max_degree, learning_type,
@@ -101,9 +101,7 @@ def build_graph_conv_net(data_input,
 		''' Defines the standard Dropout layer for convnets
 		'''
 		if atomwise_dropout:
-			raise NotImplemented
-			# Check [farizrahman4u](https://github.com/fchollet/keras/issues/3995)
-
+			return AtomwiseDropout(p_dropout)
 		return Dropout(p_dropout)
 
 	# Add first output layer directly to atom inputs
