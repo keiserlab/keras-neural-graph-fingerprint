@@ -212,7 +212,7 @@ class NeuralGraphHidden(layers.Layer):
         for degree in range(self.max_degree):
 
             # Create mask for this degree
-            atom_masks_this_degree = K.equal(atom_degrees, degree)
+            atom_masks_this_degree = K.cast(K.equal(atom_degrees, degree), K.floatx())
 
             # Multiply with hidden merge layer
             #   (use time Distributed because we are dealing with 2D input/3D for batches)
@@ -395,7 +395,7 @@ class NeuralGraphOutput(layers.Layer):
         # We have to use the edge vector for this, because in theory, a convolution
         #   could lead to a zero vector for an atom that is present in the molecule
         atom_degrees = K.sum(K.not_equal(edges, -1), axis=-1, keepdims=True)
-        general_atom_mask = K.not_equal(atom_degrees, 0)
+        general_atom_mask = K.cast(K.not_equal(atom_degrees, 0), K.floatx())
 
         # Sum the edge features for each atom
         summed_bond_features = K.sum(bonds, axis=-2)
