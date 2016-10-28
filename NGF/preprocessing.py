@@ -1,25 +1,25 @@
 from __future__ import division, print_function
+from functools import partial
+from multiprocessing import cpu_count, Pool
+
 import numpy as np
 
 from rdkit import Chem
+from keras.utils.generic_utils import Progbar
 
 import features
 
 def padaxis(array, new_size, axis, pad_value=0, pad_right=True):
     ''' Padds one axis of an array to a new size
-
     This is just a wrapper for np.pad, more usefull when only padding a single axis
-
     # Arguments:
         array: the array to pad
         new_size: the new size of the specified axis
         axis: axis along which to pad
         pad_value: pad value, 
         pad_right: boolean, pad on the right or left side
-
     # Returns:
         padded_array: np.array
-
     '''
     add_size = new_size - array.shape[axis]
     assert add_size >= 0, 'Cannot pad dimension {0} of size {1} to smaller size {2}'.format(axis, array.shape[axis], new_size)
@@ -35,7 +35,6 @@ def padaxis(array, new_size, axis, pad_value=0, pad_right=True):
 
 def tensorise_smiles(smiles, max_degree=5, max_atoms=None):
     '''Takes a list of smiles and turns the graphs in tensor representation.
-
     # Arguments:
         smiles: a list of smiles representations
         max_atoms: the maximum number of atoms per molecule (to which all
@@ -43,17 +42,13 @@ def tensorise_smiles(smiles, max_degree=5, max_atoms=None):
         max_degree: max_atoms: the maximum number of neigbour per atom that each
             molecule can have (to which all molecules will be padded), use `None`
             for auto
-
         **NOTE**: It is not recommended to set max_degree to `None`/auto when 
             using `NeuralGraph` layers. Max_degree determines the number of 
             trainable parameters and is essentially a hyperparameter.
             While models can be rebuilt using different `max_atoms`, they cannot
             be rebuild for different values of `max_degree`, as the architecture
             will be different.
-
             For organic molecules `max_degree=5` is a good value (Duvenaud et. al, 2015)
-
-
     Returns:
         list of np.array:
            - atoms: An atom feature np.array of size `(molecules, max_atoms, atom_features)`
@@ -70,7 +65,7 @@ def tensorise_smiles(smiles, max_degree=5, max_atoms=None):
     n_bond_features = features.num_bond_features()
 
     # preallocate atom tensor with 0's and bond tensor with -1 (because of 0 index)
-    # If max_degree or max_atoms is set to None (auto), initialise dim as small 
+    # If max_degree or max_atoms is set to None (auto), initialise dim as small
     #   as possible (1)
     atom_tensor = np.zeros((n, max_atoms or 1, n_atom_features))
     bond_tensor = np.zeros((n, max_atoms or 1, max_degree or 1, n_bond_features))
@@ -80,7 +75,7 @@ def tensorise_smiles(smiles, max_degree=5, max_atoms=None):
 
         #load mol, atoms and bonds
         mol = Chem.MolFromSmiles(s)
-        assert mol is not None, 'Could not parse smiles {}'.format(s)        
+        assert mol is not None, 'Could not parse smiles {}'.format(s)
         atoms = mol.GetAtoms()
         bonds = mol.GetBonds()
 
@@ -107,7 +102,7 @@ def tensorise_smiles(smiles, max_degree=5, max_atoms=None):
         for bond in bonds:
             # lookup atom ids
             a1_ix = rdkit_ix_lookup[bond.GetBeginAtom().GetIdx()]
-            a2_ix = rdkit_ix_lookup[bond.GetEndAtom().GetIdx()]            
+            a2_ix = rdkit_ix_lookup[bond.GetEndAtom().GetIdx()]
 
             # lookup how many neighbours are encoded yet
             a1_neigh = len(connectivity_mat[a1_ix])
@@ -135,3 +130,116 @@ def tensorise_smiles(smiles, max_degree=5, max_atoms=None):
             edge_tensor[mol_ix, a1_ix, : degree] = neighbours
 
     return atom_tensor, bond_tensor, edge_tensor
+
+def concat_mol_tensors(mol_tensors_list, match_degree=True, match_max_atoms=False):
+    '''Concatenates a list of molecule tensors
+
+    # Arguments:
+        mol_tensor_list: list of molecule tensors (e.g. list of
+        `(atoms, bonds, edges)`-triplets)
+        match_degree: bool, if True, the degrees of all tensors should match,
+            if False, unmatching degrees will be padded to align them.
+        match_max_atoms: bool, simular to match_degree but for max_atoms
+
+    # Retuns:
+        a single molecule tensor (as returned by `tensorise_smiles`)
+    '''
+
+    assert isinstance(mol_tensors_list, (tuple, list)), 'Provide a list or tuple of molecule tensors to concatenate'
+
+    # get max_atoms (#1) of atoms (#0) tensor of first batch (#0)
+    # and max_degree (#2) of bonds (#1) tensor of first batch (#0)
+    max_atoms = mol_tensors_list[0][0].shape[1]
+    max_degree = mol_tensors_list[0][1].shape[2]
+
+
+    # Obtain the max_degree and max_atoms of all tensors in the list
+    for atoms, bonds, edges in mol_tensors_list:
+        assert bonds.shape[0] == edges.shape[0] == atoms.shape[0], "batchsize doesn't match within tensor"
+        assert bonds.shape[1] == edges.shape[1] == atoms.shape[1], "max_atoms doesn't match within tensor"
+        assert bonds.shape[2] == edges.shape[2], "degree doesn't match within tensor"
+
+        if match_max_atoms:
+            assert max_atoms == atoms.shape[1], '`max_atoms` of molecule tensors does not match, set `match_max_atoms` to False to adjust'
+        else:
+            max_atoms = max(max_atoms, atoms.shape[1])
+
+        if match_degree:
+            assert max_degree == bonds.shape[2], '`degree` of molecule tensors does not match, set `match_degree` to False to adjust'
+        else:
+            max_degree = max(max_degree,  bonds.shape[2])
+
+    # Pad if necessary and separate tensors
+    atoms_list = []
+    bonds_list = []
+    edges_list = []
+    for atoms, bonds, edges in mol_tensors_list:
+
+        atoms = padaxis(atoms, max_atoms, axis=1)
+        bonds = padaxis(bonds, max_atoms, axis=1)
+        edges = padaxis(edges, max_atoms, axis=1, pad_value=-1)
+
+        bonds = padaxis(bonds, max_degree, axis=2)
+        edges = padaxis(edges, max_degree, axis=2, pad_value=-1)
+
+        atoms_list.append(atoms)
+        bonds_list.append(bonds)
+        edges_list.append(edges)
+
+    #stack along batch-size axis
+    atoms = np.concatenate(atoms_list, axis=0)
+    bonds = np.concatenate(bonds_list, axis=0)
+    edges = np.concatenate(edges_list, axis=0)
+
+    return atoms, bonds, edges
+
+
+def tensorise_smiles_mp(smiles, max_degree=5, max_atoms=None, workers=cpu_count()-1, chunksize=3000, verbose=True):
+    ''' Multiprocess implementation of `tensorise_smiles`
+
+    # Arguments:
+        See `tensorise_smiles` documentation
+
+    # Additional arguments:
+        workers: int, num parallel processes
+        chunksize: int, num molecules tensorised per worker, bigger chunksize is
+            preffered as each process will preallocate np.arrays
+
+    # Returns:
+        See `tensorise_smiles` documentation
+
+    # TODO:
+        - fix python keyboardinterrupt bug:
+          https://noswap.com/blog/python-multiprocessing-keyboardinterrupt
+        - replace progbar with proper logging
+    '''
+
+    pool = Pool(processes=workers)
+
+    # Create an iterator
+    #http://stackoverflow.com/questions/312443/how-do-you-split-a-list-into-evenly-sized-chunks
+    def chunks(l, n):
+        """Yield successive n-sized chunks from l."""
+        for i in range(0, len(l), n):
+            yield l[i:i + n]
+    smiles_chunks = chunks(smiles, chunksize)
+
+    # MAP: Tensorise in parallel
+    map_function = partial(tensorise_smiles, max_degree=max_degree, max_atoms=max_atoms)
+    if verbose:
+        print('Tensorising molecules in batches...')
+        pbar = Progbar(len(smiles), width=50)
+        tensor_list = []
+        for tensors in pool.imap(map_function, smiles_chunks):
+            pbar.add(tensors[0].shape[0])
+            tensor_list.append(tensors)
+        print('Merging batch tensors...    ', end='')
+    else:
+        tensor_list = pool.map(map_function, smiles_chunks)
+    if verbose:
+        print('[DONE]')
+
+    # REDUCE: Concatenate the obtained tensors
+    pool.close()
+    pool.join()
+    return concat_mol_tensors(tensor_list, match_degree=max_degree!=None, match_max_atoms=max_atoms!=None)

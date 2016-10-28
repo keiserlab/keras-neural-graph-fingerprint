@@ -4,7 +4,7 @@ from keras.layers import Input, merge, Dense
 from keras import models
 
 import utils
-from NGF.preprocessing import tensorise_smiles
+from NGF.preprocessing import tensorise_smiles, tensorise_smiles_mp
 from NGF.layers import NeuralGraphHidden, NeuralGraphOutput
 from NGF.models import build_graph_conv_model
 
@@ -15,7 +15,7 @@ print("{:=^100}".format(' Data preprocessing '))
 data, labels = utils.load_delaney()
 
 # Tensorise data
-X_atoms, X_bonds, X_edges = tensorise_smiles(data)
+X_atoms, X_bonds, X_edges = tensorise_smiles_mp(data)
 print('Atoms:', X_atoms.shape)
 print('Bonds:', X_bonds.shape)
 print('Edges:', X_edges.shape)
