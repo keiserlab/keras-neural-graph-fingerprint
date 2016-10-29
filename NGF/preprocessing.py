@@ -11,15 +11,19 @@ import features
 
 def padaxis(array, new_size, axis, pad_value=0, pad_right=True):
     ''' Padds one axis of an array to a new size
+
     This is just a wrapper for np.pad, more usefull when only padding a single axis
+
     # Arguments:
         array: the array to pad
         new_size: the new size of the specified axis
         axis: axis along which to pad
-        pad_value: pad value, 
+        pad_value: pad value,
         pad_right: boolean, pad on the right or left side
+
     # Returns:
         padded_array: np.array
+
     '''
     add_size = new_size - array.shape[axis]
     assert add_size >= 0, 'Cannot pad dimension {0} of size {1} to smaller size {2}'.format(axis, array.shape[axis], new_size)
@@ -35,25 +39,29 @@ def padaxis(array, new_size, axis, pad_value=0, pad_right=True):
 
 def tensorise_smiles(smiles, max_degree=5, max_atoms=None):
     '''Takes a list of smiles and turns the graphs in tensor representation.
+
     # Arguments:
-        smiles: a list of smiles representations
+        smiles: a list (or iterable) of smiles representations
         max_atoms: the maximum number of atoms per molecule (to which all
             molecules will be padded), use `None` for auto
         max_degree: max_atoms: the maximum number of neigbour per atom that each
             molecule can have (to which all molecules will be padded), use `None`
             for auto
-        **NOTE**: It is not recommended to set max_degree to `None`/auto when 
-            using `NeuralGraph` layers. Max_degree determines the number of 
+
+        **NOTE**: It is not recommended to set max_degree to `None`/auto when
+            using `NeuralGraph` layers. Max_degree determines the number of
             trainable parameters and is essentially a hyperparameter.
             While models can be rebuilt using different `max_atoms`, they cannot
             be rebuild for different values of `max_degree`, as the architecture
             will be different.
+
             For organic molecules `max_degree=5` is a good value (Duvenaud et. al, 2015)
-    Returns:
-        list of np.array:
-           - atoms: An atom feature np.array of size `(molecules, max_atoms, atom_features)`
-           - bonds: A bonds np.array of size `(molecules, max_atoms, max_neighbours)`
-           - edges: A connectivity array of size `(molecules, max_atoms, max_neighbours, bond_features)`
+
+
+    # Returns:
+        atoms: np.array, An atom feature np.array of size `(molecules, max_atoms, atom_features)`
+        bonds: np.array, A bonds np.array of size `(molecules, max_atoms, max_neighbours)`
+        edges: np.array, A connectivity array of size `(molecules, max_atoms, max_neighbours, bond_features)`
     TODO:
         * Arguments for sparse vector encoding
 
