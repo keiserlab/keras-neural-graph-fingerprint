@@ -2,7 +2,7 @@ from __future__ import division, print_function, absolute_import
 
 import numpy as np
 
-class SparseDataTensor(object):
+class SparseTensor(object):
     ''' An immutable class for sparse tensors of any shape, type and sparse value.
 
     # Arguments
@@ -43,12 +43,14 @@ class SparseDataTensor(object):
                  dtype=None, main_axis=0, assume_sorted=False):
 
         # Assert valid index and convert negative indices to positive
-        main_axis = range(len(nonsparse_indices))[main_axis]
+        ndims = len(nonsparse_indices)
+        main_axis = range(ndims)[main_axis]
 
         self.main_axis = main_axis
         self.default_value = default_value
 
-        if not assume_sorted:
+        # if not assume_sorted:
+        if not assume_sorted and len(nonsparse_values):
             nonsparse_entries = zip(nonsparse_values, *nonsparse_indices)
             sorted(nonsparse_entries, key=lambda x: x[main_axis+1])
             sorted_entries = zip(*nonsparse_entries)
@@ -72,6 +74,13 @@ class SparseDataTensor(object):
                                       range(self.shape[self.main_axis]+1))
 
     @property
+    def shape(self):
+        if len(self.nonsparse_values):
+            return tuple([max(inds)+1 for inds in self.nonsparse_indices])
+        else:
+            return tuple([0]*self.ndims)
+
+    @property
     def ndims(self):
         return len(self.nonsparse_indices)
 
@@ -84,65 +93,8 @@ class SparseDataTensor(object):
         self._dtype = np.dtype(dtype)
         self.nonsparse_values = self.nonsparse_values.astype(self.dtype)
 
-    @property
-    def shape(self):
-        return tuple([max(inds)+1 for inds in self.nonsparse_indices])
-
-    @classmethod
-    def from_array(cls, arr, dtype=None, default_value=0):
-        ''' Turns a regular array or array-like into a SparseDataTensor
-
-        # Arguments:
-            arr (array-like): The array to convert into a SparseDataTensor
-            dtype (str/np.dtype): The datatype to use. If none is provided then
-                `np.array(arr).dtype` will be used
-            default_value (of same dtype): The nonsparse value to filter out
-
-        # Returns:
-            tensor (selfDataTensor): S.t. `tensor.as_array(arr.shape) == arr`
-
-        '''
-
-        arr = np.array(arr)
-
-        nonsparse_indices = list(np.where(arr != default_value))
-        nonsparse_values = arr[nonsparse_indices]
-
-        #assume_sorted is true
-        return cls(dtype=arr.dtype, nonsparse_indices=nonsparse_indices,
-                   nonsparse_values=nonsparse_values, assume_sorted=True)
-
-
-    def as_array(self, shape=None):
-        '''Returns the SparseDataTensor as a nonsparse np.array
-
-        # Arguments:
-            shape (tuple/list): desired output shape, if None, the minimal shape
-                will be used. None values can also be used for individual dimensions
-                wihin the shape tuple/list.
-                Note that shape should be at least as big as `self.shape`.
-
-        # Returns:
-            out (np.array): nonsparse array of self.dtype
-
-        '''
-
-        if not shape:
-            shape = [None] * self.ndims
-
-        # Overwrite None values
-        shape = [true_s if s==None else s for s, true_s in zip(shape, self.shape)]
-
-        assert np.all([s >=true_s for s, true_s in zip(shape, self.shape)])
-
-        out = np.zeros(shape, dtype=self.dtype)
-        out.fill(self.default_value)
-        out[self.nonsparse_indices] = self.nonsparse_values
-
-        return out
-
     def _nonsparse_entries(self, keys):
-        ''' Returns indices and values required to create a new SparseDataTensor
+        ''' Returns indices and values required to create a new SparseTensor
             given the provided keys (along main_axis)
 
         # Arguments:
@@ -193,27 +145,18 @@ class SparseDataTensor(object):
         else:
             raise ValueError
 
-    def to_dict():
-        '''
-        '''
-        pass
-
-    @classmethod
-    def from_dict():
-        pass
-
     # Magic funcions
     def __len__(self):
         return self.shape[self.main_axis]
 
     def __getitem__(self, keys):
-        '''Gets the requested datapoints (along main axis) as SparseDataTensor
+        '''Gets the requested datapoints (along main axis) as SparseTensor
 
         # Arguments:
             keys (int, slice, list-like): Only one dimensional indexing is allowed
 
         # Returns:
-            tensor (selfDataTensor): A new `SparseDataTensor` that corresponds
+            tensor (selfDataTensor): A new `SparseTensor` that corresponds
                 to the requested keys
         '''
 
@@ -232,10 +175,12 @@ class SparseDataTensor(object):
             #Drop singleton dimension
             indices.pop(self.main_axis)
 
-        return self.__class__(dtype=self.dtype,
-                              nonsparse_indices=indices, nonsparse_values=values,
-                              main_axis=self.main_axis,
-                              default_value=self.default_value)
+        tensor = self.__class__(dtype=self.dtype,
+                                nonsparse_indices=indices, nonsparse_values=values,
+                                main_axis=self.main_axis,
+                                default_value=self.default_value)
+
+        return tensor
 
     def __repr__(self):
         return "%s(dtype='%s', nonsparse_indices=%r, nonsparse_values=%r, main_axis=%r, default_value=%r)" % (
@@ -253,7 +198,7 @@ class SparseDataTensor(object):
 
         If shapes cannot match, raises
         '''
-        if isinstance(other, SparseDataTensor):
+        if isinstance(other, SparseTensor):
             other = other.as_array()
             shape = [max(s,o) for s,o in zip(self.shape, other.shape)]
         else:
@@ -265,13 +210,100 @@ class SparseDataTensor(object):
     def __ne__(self, other):
         return np.invert(self == other)
 
+    # Export and import functionality
+    @classmethod
+    def from_array(cls, arr, dtype=None, main_axis=0, default_value=0):
+        ''' Turns a regular array or array-like into a SparseTensor
+
+        # Arguments:
+            arr (array-like): The array to convert into a SparseTensor
+            dtype (str/np.dtype): The datatype to use. If none is provided then
+                `np.array(arr).dtype` will be used
+            default_value (of same dtype): The nonsparse value to filter out
+
+        # Returns:
+            tensor (selfDataTensor): S.t. `tensor.as_array(arr.shape) == arr`
+
+        '''
+
+        arr = np.array(arr)
+
+        nonsparse_indices = list(np.where(arr != default_value))
+        nonsparse_values = arr[nonsparse_indices]
+
+        # Assume_sorted is main_axis=0 because of np.where
+        assume_sorted = main_axis==0
+
+        return cls(dtype=arr.dtype, nonsparse_indices=nonsparse_indices,
+                   nonsparse_values=nonsparse_values, main_axis=0,
+                   assume_sorted=assume_sorted)
+
+
+    def as_array(self, shape=None):
+        '''Returns the SparseTensor as a nonsparse np.array
+
+        # Arguments:
+            shape (tuple/list): desired output shape, if None, the minimal shape
+                will be used. None values can also be used for individual dimensions
+                wihin the shape tuple/list.
+                Note that shape should be at least as big as `self.shape`.
+
+        # Returns:
+            out (np.array): nonsparse array of self.dtype
+
+        '''
+
+        if not shape:
+            shape = [None] * self.ndims
+
+        # Overwrite None values
+        shape = [true_s if s==None else s for s, true_s in zip(shape, self.shape)]
+
+        assert np.all([s >=true_s for s, true_s in zip(shape, self.shape)])
+
+        out = np.zeros(shape, dtype=self.dtype)
+        out.fill(self.default_value)
+        out[self.nonsparse_indices] = self.nonsparse_values
+
+        return out
+
+    def to_config(self, jsonify=False):
+        ''' Returns a dict that can be used to recreate the file efficiently
+
+        # Arguments:
+            jsonify (bool): If True, dict will be jsonifiably (no `np.arrays`)
+
+        # Returns:
+            config (dict): that can be used in `SparseTensor.from_config`
+
+        '''
+        if jsonify:
+            return dict(nonsparse_indices=[i.tolist() for i in self.nonsparse_indices],
+                        nonsparse_values=self.nonsparse_values.tolist(),
+                        default_value=self.default_value, dtype=str(self.dtype),
+                        main_axis=self.main_axis)
+        else:
+            return dict(nonsparse_indices=self.nonsparse_indices,
+                        nonsparse_values=self.nonsparse_values,
+                        default_value=self.default_value, dtype=str(self.dtype),
+                        main_axis=self.main_axis)
+
+    @classmethod
+    def from_config(cls, config):
+        ''' Returns a SparseTensor based on the `config` dict
+        '''
+        return cls(nonsparse_indices=config['nonsparse_indices'],
+                    nonsparse_values=config['nonsparse_values'],
+                    default_value=config['default_value'], dtype=config['dtype'],
+                    main_axis=config['main_axis'], assume_sorted=True)
+
 
 def unit_tests(seed=None):
 
     np.random.seed(seed)
 
     arr = np.random.randint(3, size=(50,30,5,8))
-    sparse = SparseDataTensor.from_array(arr)
+    sparse = SparseTensor.from_array(arr)
 
     singleton_shape = arr.shape[1:]
     full_shape = (None,) + singleton_shape
@@ -322,6 +354,10 @@ def unit_tests(seed=None):
 
     print('Testing: `repr` can reproduce sparse')
     assert np.all(eval(repr(sparse)) == sparse)
+
+    print('Testing: `from_config` can reproduce `sparse.to_config`')
+    assert np.all(SparseTensor.from_config(sparse.to_config(False)) == sparse)
+    assert np.all(SparseTensor.from_config(sparse.to_config(True)) == sparse)
 
     print('All unit tests passed!')
 
