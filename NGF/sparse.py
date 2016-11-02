@@ -361,5 +361,146 @@ def unit_tests(seed=None):
 
     print('All unit tests passed!')
 
+class TensorList(object):
+    ''' Helperclass to cluster tensors together, acts as a single list by propageting
+    calls and slicing trough it's members.
+
+    # Arguments:
+        tensors (list of iterables): Should have the same length
+
+    '''
+
+    def __init__(self, tensors):
+        lengths = set([len(t) for t in tensors])
+        assert len(lengths) == 1, 'Length of all tensors should be the same'
+        self.length = list(lengths)[0]
+        self.tensors = tensors
+
+    def map(self, fn):
+        ''' Apply function to all tensors and return result
+        '''
+        return [fn(t) for t in self.tensors]
+
+    def apply(self, fn):
+        ''' Apply function to all tensors and replace with
+        '''
+        self.tensors = self.map(fn)
+
+    def __getitem__(self, key):
+        return [t[key] for t in self.tensors]
+
+    @property
+    def shape(self):
+        return [t.shape for t in self.tensors]
+
+    def __repr__(self):
+        return "%s(tensors=%r)" % (self.__class__.__name__, self.tensors)
+
+    def __len__(self):
+        return self.length
+
+
+class SparseTensorList(TensorList):
+    ''' Same as `Tensorlist`, but enforces all `tensors` to be `SparseTensors`
+
+    # Arguments:
+        tensors (list of iterables): as in `TensorList`
+        sparse_tensor_params: keyword arguments dict used when initialising
+            the `SparseTensor`s
+
+    '''
+    def __init__(self, tensors, sparse_tensor_params={}):
+        for i, tensor in enumerate(tensors):
+            if not isinstance(tensor, SparseTensor):
+                tensors[i] = SparseTensor.from_array(tensor, **sparse_tensor_params)
+
+        super(SparseTensorList, self).__init__(tensors)
+
+class SparseIterator(object):
+    ''' Iterates over a dataset.
+
+    # Arguments:
+        data (iterable): data to iterate trough. The iterator will use list-indexing
+            to retrieve batches from the data, so the data should support list-indexing
+        batch_size (int): Number of datapoints yielded per batch
+        shuffle (bool): Wether to loop trough the data randomly or not
+        epochs (int/None): maximum number of epochs after which a `StopIteration`
+            is raised (None for infinite generator)
+
+    # Yields
+        batch (iterable): a slice of `data` of length `batch_size` (except
+            possibly on last batch of epoch)
+
+    # Example
+        using `keras.models.model`
+        >>> model.fit_generator(SparseIterator(np.array(zip(data, labels)))
+
+    # Note
+        designed for use with keras `model.fit_generator`
+    '''
+    def __init__(self, data, batch_size=1, epochs=None, shuffle=True):
+        self.data = data
+        self.epochs = epochs
+        self.batch_size = batch_size
+        self.shuffle = shuffle
+
+        self.reset()
+
+    def __iter__(self):
+        return self
+
+    def next(self):
+
+        # At the end of an epoch, raise Stopiteration, or reset counter
+        if self.i >= len(self.data):
+            if self.epoch >= self.epochs:
+                raise StopIteration
+            else:
+                self.i = 0
+                self.epoch += 1
+
+        # At the begin of an epoch, shuffle the order of the data
+        if self.i==0 and self.shuffle:
+            np.random.shuffle(self.indices)
+
+        # Get the indices for this batch, and update counter i
+        use_inds = self.indices[self.i:self.i+self.batch_size]
+        self.i += len(use_inds)
+
+        return self.data[use_inds]
+
+    def reset(self):
+        ''' Resets the counters of the iterator
+        '''
+        self.i = 0
+        self.epoch = 0
+        self.indices = range(len(self.data))
+
+
+def example(simple=True):
+    if simple:
+        atoms = np.array(range(10))
+        bonds = np.array(range(10, 20))
+        edges = np.array(range(20, 30))
+
+        labels = np.array(range(0, -10, -1))
+        batch_size = 3
+    else:
+        atoms = np.random.randint(3, size=(50,30,62))
+        bonds = np.random.randint(3, size=(50,30,5,5))
+        edges = np.random.randint(3, size=(50,30,5,8))
+
+        labels = np.random.rand(50)
+        batch_size = 25
+
+    mols = SparseTensorList([atoms, bonds, edges])
+    data = TensorList([mols, labels])
+    it = SparseIterator(data, epochs=100, batch_size=batch_size)
+
+    for x, y in it:
+        print('X:', x)
+        print('Y', y)
+
 if __name__ == '__main__':
     unit_tests()
+    example()
