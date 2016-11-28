@@ -1,38 +1,12 @@
 from __future__ import print_function
-import inspect
 
 from keras import layers
 from keras.utils.layer_utils import layer_from_config
+from utils import filter_func_args
 
 import keras.backend as K
 
 import theano
-
-def filter_func_args(fn, args, invalid_args=[], overrule_args=[]):
-    '''Separate a dict of arguments into one that a function takes, and the rest
-
-    # Arguments:
-        fn: arbitrary function
-        args: dict of arguments to separate
-        invalid_args: list of arguments that will be removed from args
-        overrule_args: list of arguments that will be returned in other_args,
-            even if they are arguments that `fn` takes
-
-    # Returns:
-        fn_args, other_args: tuple of separated arguments, ones that the function
-            takes, and the others (minus `invalid_args`)
-    '''
-
-    fn_valid_args = inspect.getargspec(fn)[0]
-    fn_args = {}
-    other_args = {}
-    for arg, val in args.iteritems():
-        if not arg in invalid_args:
-            if (arg in fn_valid_args) and (arg not in overrule_args):
-                fn_args[arg] = val
-            else:
-                other_args[arg] = val
-    return fn_args, other_args
 
 # TODO: Rewrite this function to Keras and drop theano dependency
 def parallel_gather(references, indices):
