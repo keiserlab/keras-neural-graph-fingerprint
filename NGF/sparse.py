@@ -3,31 +3,7 @@ from __future__ import division, print_function, absolute_import
 import numpy as np
 import pickle as pkl
 
-def mol_dims_to_shapes(max_atoms, max_degree, num_atom_features, num_bond_features, num_molecules=None):
-    ''' Helper function, returns shape for molecule tensors given dim sizes
-    '''
-    atoms_shape = (num_molecules, max_atoms, num_atom_features)
-    bonds_shape = (num_molecules, max_atoms, max_degree, num_bond_features)
-    edges_shape = (num_molecules, max_atoms, max_degree)
-    return [atoms_shape, bonds_shape, edges_shape]
-
-def mol_shapes_to_dims(mol_tensors=None, mol_shapes=None):
-    ''' Helper function, returns dim sizes for molecule tensors given tensors or
-    tensor shapes
-    '''
-
-    if not mol_shapes:
-        mol_shapes = [t.shape for t in mol_tensors]
-
-    num_molecules0, max_atoms0, num_atom_features = mol_shapes[0]
-    num_molecules1, max_atoms1, max_degree1, num_bond_features = mol_shapes[1]
-    num_molecules2, max_atoms2, max_degree2 = mol_shapes[2]
-
-    assert num_molecules0 == num_molecules1 == num_molecules2, 'num_molecules does not match within tensors'
-    assert max_atoms1 == max_atoms2, 'max_atoms does not match within tensors'
-    assert max_degree1 == max_degree2, 'max_degree does not match within tensors'
-
-    return max_atoms1, max_degree1, num_atom_features, num_bond_features, num_molecules1
+from .utils import mol_dims_to_shapes, mol_shapes_to_dims
 
 class SparseTensor(object):
     ''' An immutable class for sparse tensors of any shape, type and sparse value.

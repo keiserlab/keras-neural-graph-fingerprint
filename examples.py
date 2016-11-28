@@ -106,7 +106,7 @@ model2.summary()
 # ==============================================================================
 print("{:=^100}".format(' Example 3 '))
 
-model3 = build_graph_conv_model(max_atoms, num_atom_features, num_bond_features, max_degree,
+model3 = build_graph_conv_model(max_atoms, max_degree, num_atom_features, num_bond_features,
 								learning_type='regression', conv_layer_sizes=[conv_width, conv_width],
                                 fp_layer_size=[fp_length, fp_length, fp_length],
 								conv_activation='relu', fp_activation='softmax',
@@ -124,7 +124,7 @@ print("{:=^100}".format(' Example 4 '))
 
 # Build the same model, but this time use None for num_atom_features, to allow
 #   variation of this variable per batch.
-model4 = build_graph_conv_model(None, num_atom_features, num_bond_features, max_degree,
+model4 = build_graph_conv_model(None, max_degree, num_atom_features, num_bond_features,
                                 learning_type='regression', conv_layer_sizes=[conv_width, conv_width],
                                 fp_layer_size=[fp_length, fp_length, fp_length],
                                 conv_activation='relu', fp_activation='softmax',

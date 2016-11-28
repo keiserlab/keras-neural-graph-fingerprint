@@ -2,7 +2,8 @@ from __future__ import print_function
 
 from keras import layers
 from keras.utils.layer_utils import layer_from_config
-from utils import filter_func_args
+from utils import filter_func_args, mol_shapes_to_dims
+
 
 import keras.backend as K
 
@@ -116,13 +117,8 @@ class NeuralGraphHidden(layers.Layer):
     def build(self, inputs_shape):
 
         # Import dimensions
-        atoms_shape, bonds_shape, edges_shape = inputs_shape
-        num_samples = atoms_shape[0]
-        max_atoms = atoms_shape[1]
-        num_atom_features = atoms_shape[-1]
-        num_bond_features = bonds_shape[-1]
-
-        max_degree = edges_shape[2]
+        (max_atoms, max_degree, num_atom_features, num_bond_features,
+         num_samples) = mol_shapes_to_dims(mol_shapes=inputs_shape)
 
         self.max_degree = max_degree
 
@@ -207,11 +203,8 @@ class NeuralGraphHidden(layers.Layer):
     def get_output_shape_for(self, inputs_shape):
 
         # Import dimensions
-        atoms_shape, bonds_shape, edges_shape = inputs_shape
-        num_samples = atoms_shape[0]
-        max_atoms = atoms_shape[1]
-        num_features = atoms_shape[2]
-        max_degree = edges_shape[2]
+        (max_atoms, max_degree, num_atom_features, num_bond_features,
+         num_samples) = mol_shapes_to_dims(mol_shapes=inputs_shape)
 
         return (num_samples, max_atoms, self.conv_width)
 
@@ -331,11 +324,8 @@ class NeuralGraphOutput(layers.Layer):
     def build(self, inputs_shape):
 
         # Import dimensions
-        atoms_shape, bonds_shape, edges_shape = inputs_shape
-        max_atoms = atoms_shape[1]
-        max_degree = edges_shape[2]
-        num_atom_features = atoms_shape[-1]
-        num_bond_features = bonds_shape[-1]
+        (max_atoms, max_degree, num_atom_features, num_bond_features,
+         num_samples) = mol_shapes_to_dims(mol_shapes=inputs_shape)
 
         # Add the dense layer that contains the trainable parameters
         # Initialise dense layer with specified params (kwargs) and name
@@ -392,11 +382,8 @@ class NeuralGraphOutput(layers.Layer):
     def get_output_shape_for(self, inputs_shape):
 
         # Import dimensions
-        atoms_shape, bonds_shape, edges_shape = inputs_shape
-        num_samples = atoms_shape[0]
-        max_atoms = atoms_shape[1]
-        num_features = atoms_shape[2]
-        max_degree = edges_shape[2]
+        (max_atoms, max_degree, num_atom_features, num_bond_features,
+         num_samples) = mol_shapes_to_dims(mol_shapes=inputs_shape)
 
         return (num_samples, self.fp_length)
 

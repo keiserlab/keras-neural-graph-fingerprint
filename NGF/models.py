@@ -7,23 +7,22 @@ from keras import models
 from .layers import NeuralGraphHidden, NeuralGraphOutput, AtomwiseDropout
 from .utils import zip_mixed, is_iterable
 
-def build_graph_conv_model(max_atoms, num_atom_features, num_bond_features,
-						   max_degree, learning_type,
-						   output_size=1, optimizer='adagrad',
-						   **kwargs):
+def build_graph_conv_model(max_atoms, max_degree, num_atom_features,
+						   num_bond_features, learning_type, output_size=1,
+						   optimizer='adagrad', **kwargs):
 	''' Builds and compiles a graph convolutional network with a regular neural
 		network on top for regression.
 
 	Especially usefull when using the sklearn `KerasClassifier` wrapper
 
 	# Arguments
-		max_atoms, num_atom_features, num_bond_features, max_degree: The
+		max_atoms, max_degree, num_atom_features, num_bond_features (int): The
 			dimensionalities used to create input layers.
-		learning_type: Intended use of model, affects loss function and final
+		learning_type (str): Intended use of model, affects loss function and final
 			activation function used. allowed: 'regression', 'binary_class',
 			'multi_class'
-		output_size: size of prediciton layer
-		optimizer: used to compile the model
+		output_size (int): size of prediciton layer
+		optimizer (str/keras.optimizer): used to compile the model
 		kwargs: Used to call `build_graph_conv_net`
 
 	# Returns:
