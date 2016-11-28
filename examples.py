@@ -7,7 +7,7 @@ import utils
 from NGF.preprocessing import tensorise_smiles, tensorise_smiles_mp
 from NGF.layers import NeuralGraphHidden, NeuralGraphOutput
 from NGF.models import build_graph_conv_model
-from NGF.sparse import SparseTensor, TensorList, EpochIterator
+from NGF.sparse import GraphTensor, EpochIterator
 
 # ==============================================================================
 # ================================ Load the data ===============================
@@ -133,21 +133,10 @@ model4 = build_graph_conv_model(None, num_atom_features, num_bond_features, max_
 # Show summary
 model4.summary()
 
-# Convert the atom features into sparse tensors, use return_array=True so that once
-#   we take a sample from the indes, they are returned as a np.array.
-
-# The sparse tensor subsample will have the smallest dimensions possible,
-#   for num_atoms and max_atoms, this is a desired effect, however, for max_degree
-#   and num_bond_features, we will set a max_shape, to controll their size
-sparse_atoms = SparseTensor.from_array(X_atoms, max_shape=(None, None, num_atom_features), return_array=True)
-sparse_bonds = SparseTensor.from_array(X_bonds, max_shape=(None, None, max_degree, num_bond_features), return_array=True)
-sparse_edges = SparseTensor.from_array(X_edges, max_shape=(None, None, max_degree), return_array=True, default_value=-1)
-
-# Merge (sparse) features and data into a tensorlist, so that taking a slice of
-#   the list will return a list of the sliced tensors.
-X_mols = TensorList([sparse_atoms, sparse_bonds, sparse_edges])
-data = TensorList([X_mols, labels])
+# Convert the atom features into GraphTensors, by default, these are sparse
+# along the max_atoms dimension.
+X_mols = GraphTensor([X_atoms, X_bonds, X_edges])
 
 # Build a generator and train the model
-my_generator = EpochIterator(data, batch_size=128)
+my_generator = EpochIterator((X_mols, labels), batch_size=128)
 model4.fit_generator(my_generator, nb_epoch=20, samples_per_epoch=len(labels), pickle_safe=True)

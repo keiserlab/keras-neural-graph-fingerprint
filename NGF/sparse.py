@@ -1,8 +1,33 @@
 from __future__ import division, print_function, absolute_import
 
 import numpy as np
-
 import pickle as pkl
+
+def mol_dims_to_shapes(max_atoms, max_degree, num_atom_features, num_bond_features, num_molecules=None):
+    ''' Helper function, returns shape for molecule tensors given dim sizes
+    '''
+    atoms_shape = (num_molecules, max_atoms, num_atom_features)
+    bonds_shape = (num_molecules, max_atoms, max_degree, num_bond_features)
+    edges_shape = (num_molecules, max_atoms, max_degree)
+    return [atoms_shape, bonds_shape, edges_shape]
+
+def mol_shapes_to_dims(mol_tensors=None, mol_shapes=None):
+    ''' Helper function, returns dim sizes for molecule tensors given tensors or
+    tensor shapes
+    '''
+
+    if not mol_shapes:
+        mol_shapes = [t.shape for t in mol_tensors]
+
+    num_molecules0, max_atoms0, num_atom_features = mol_shapes[0]
+    num_molecules1, max_atoms1, max_degree1, num_bond_features = mol_shapes[1]
+    num_molecules2, max_atoms2, max_degree2 = mol_shapes[2]
+
+    assert num_molecules0 == num_molecules1 == num_molecules2, 'num_molecules does not match within tensors'
+    assert max_atoms1 == max_atoms2, 'max_atoms does not match within tensors'
+    assert max_degree1 == max_degree2, 'max_degree does not match within tensors'
+
+    return max_atoms1, max_degree1, num_atom_features, num_bond_features, num_molecules1
 
 class SparseTensor(object):
     ''' An immutable class for sparse tensors of any shape, type and sparse value.
@@ -16,9 +41,6 @@ class SparseTensor(object):
         dtype (str/np.dtype): dtype, if `None`, dtype of nonsparse_values will be
             used
         main_axis (int): Axis along which `len` and `__getitem__ ` will work.
-        return_array (bool): If True, the SparseTensor will return a `np.array`
-            when retrieving elements along it's index. E.g. `tensor[0:1]` will return
-            a numpy array rather than a SparseTensor
         assume sorted (bool): Only set to true if `nonsparse_indices[main_axis]`
             is sorted! (To speed up initialisation)
 
@@ -50,8 +72,7 @@ class SparseTensor(object):
             avoid expensive rebuilding
     '''
     def __init__(self, nonsparse_indices, nonsparse_values, default_value=0,
-                 max_shape=None, dtype=None, main_axis=0, return_array=False,
-                 assume_sorted=False):
+                 max_shape=None, dtype=None, main_axis=0, assume_sorted=False):
 
         # Assert valid index and convert negative indices to positive
         ndims = len(nonsparse_indices)
@@ -59,7 +80,6 @@ class SparseTensor(object):
 
         self.main_axis = main_axis
         self.default_value = default_value
-        self.return_array = return_array
 
         # Sort if necessary
         if not assume_sorted and len(nonsparse_values):
@@ -224,27 +244,17 @@ class SparseTensor(object):
             # Determining the new main axis is actually a trivial decision
             main_axis = min(main_axis, len(max_shape)-1)
 
-        tensor = self.__class__(dtype=self.dtype,
-                                nonsparse_indices=indices, nonsparse_values=values,
-                                main_axis=main_axis, default_value=self.default_value,
-                                max_shape=max_shape, return_array=self.return_array)
-
-        # If returning as array, max sure to return an array with the same length
-        #   as keys. (When keys has 0-entries at it's end, they will be removed
-        #   in `tensor`
-        if self.return_array:
-            if not isinstance(keys, int):
-                max_shape[main_axis] = len(keys)
-            return tensor.as_array(max_shape)
-        else:
-            return tensor
+        return self.__class__(dtype=self.dtype,
+                              nonsparse_indices=indices, nonsparse_values=values,
+                              main_axis=main_axis, default_value=self.default_value,
+                              max_shape=max_shape)
 
     def __repr__(self):
-        return "%s(dtype='%s', nonsparse_indices=%r, nonsparse_values=%r, main_axis=%r, default_value=%r, max_shape=%r, return_array=%r)" % (
+        return "%s(dtype='%s', nonsparse_indices=%r, nonsparse_values=%r, main_axis=%r, default_value=%r, max_shape=%r)" % (
                 self.__class__.__name__, self.dtype,
                 [list(ind) for ind in self.nonsparse_indices],
                 list(self.nonsparse_values), self.main_axis, self.default_value,
-                self.max_shape, self.return_array)
+                self.max_shape)
 
     def __str__(self):
         return "%s(dtype='%s', shape=%s, default_value=%s)" % (
@@ -278,12 +288,12 @@ class SparseTensor(object):
         assume_sorted = True
         return (type(self), (self.nonsparse_indices, self.nonsparse_values,
                 self.default_value, self.max_shape, self.dtype, self.main_axis,
-                self.return_array, assume_sorted))
+                assume_sorted))
 
     # Export and import functionality
     @classmethod
     def from_array(cls, arr, dtype=None, main_axis=0, default_value=0,
-                   max_shape=None, return_array=False):
+                   max_shape=None):
         ''' Turns a regular array or array-like into a SparseTensor
 
         # Arguments:
@@ -307,8 +317,8 @@ class SparseTensor(object):
 
         return cls(dtype=arr.dtype, nonsparse_indices=nonsparse_indices,
                    nonsparse_values=nonsparse_values, main_axis=0,
-                   max_shape=max_shape, return_array=return_array,
-                   default_value=default_value, assume_sorted=assume_sorted)
+                   max_shape=max_shape, default_value=default_value,
+                   assume_sorted=assume_sorted)
 
 
     def as_array(self, shape=None):
@@ -355,17 +365,15 @@ class SparseTensor(object):
 
         '''
         if jsonify:
-            return dict(nonsparse_indices=[i.tolist() for i in self.nonsparse_indices],
-                        nonsparse_values=self.nonsparse_values.tolist(),
-                        default_value=self.default_value, dtype=str(self.dtype),
-                        main_axis=self.main_axis, max_shape=self.max_shape,
-                        return_array=self.return_array)
+            nonsparse_indices = [i.tolist() for i in self.nonsparse_indices]
+            nonsparse_values = self.nonsparse_values.tolist()
         else:
-            return dict(nonsparse_indices=self.nonsparse_indices,
-                        nonsparse_values=self.nonsparse_values,
-                        default_value=self.default_value, dtype=str(self.dtype),
-                        main_axis=self.main_axis, max_shape=self.max_shape,
-                        return_array=self.return_array)
+            nonsparse_indices = self.nonsparse_indices
+            nonsparse_values = self.nonsparse_values
+
+        return dict(nonsparse_indices=nonsparse_indices, nonsparse_values=nonsparse_values,
+                    default_value=self.default_value, dtype=str(self.dtype),
+                    main_axis=self.main_axis, max_shape=self.max_shape,)
 
     @classmethod
     def from_config(cls, config):
@@ -375,14 +383,205 @@ class SparseTensor(object):
                     nonsparse_values=config['nonsparse_values'],
                     default_value=config['default_value'], dtype=config['dtype'],
                     main_axis=config['main_axis'], max_shape=config['max_shape'],
-                    return_array=config['return_array'], assume_sorted=True)
+                    assume_sorted=True)
+
+class TensorList(object):
+    ''' Helperclass to cluster tensors together, acts as a single list by propageting
+    calls and slicing trough it's members.
+
+    # Arguments:
+        tensors (list of iterables): Should have the same length
+
+    # Example:
+        ```
+        >>> tensors = TensorList([np.zeros((5,4)), np.ones((5,2,2)), -np.ones((5,))])
+        >>> tensors.shape
+        [(5, 4), (5, 2, 2), (5,)]
+        >>> tensors[0:1]
+        [array([[ 0.,  0.,  0.,  0.]]), array([[[ 1.,  1.], [ 1.,  1.]]]), array([-1.])]
+        ```
+    '''
+
+    def __init__(self, tensors):
+        lengths = set([len(t) for t in tensors])
+        assert len(lengths) == 1, 'Length of all tensors should be the same'
+        self.length = list(lengths)[0]
+        self.tensors = tensors
+
+    def map(self, fn):
+        ''' Apply function to all tensors and return result
+        '''
+        return [fn(t) for t in self.tensors]
+
+    def apply(self, fn):
+        ''' Apply function to all tensors and replace with
+        '''
+        self.tensors = self.map(fn)
+
+    def __getitem__(self, key):
+        return [t[key] for t in self.tensors]
+
+    @property
+    def shape(self):
+        return [t.shape for t in self.tensors]
+
+    def __repr__(self):
+        return "%s(tensors=%r)" % (self.__class__.__name__, self.tensors)
+
+    def __len__(self):
+        return self.length
+
+    def __reduce__(self):
+        return (type(self), (self.tensors, ))
+
+class GraphTensor(TensorList):
+    ''' Datacontainer for (molecular) graph tensors.
+
+    This datacontainer mainly has advantages for indexing. The three tensors
+        describing the graph are grouped in a tensorlist so that `graph_tensor[x]`
+        will return atoms[x], bonds[x], edges[x]
+
+    Furthermore, this container allows for sparse dimensions. A sparse dimension
+        means that for each batch, that dimension is minimized to the maximum
+        length that occurs within that batch.
+
+    # Arguments:
+        mol_tensors (tuple): tuple of np.array of nonspares mol tensors
+            (atoms, bonds, edges)
+        sparse_max_atoms (bool):  Wether or not max_atoms should be a sparse
+            dimension.
+        sparse_max_degree (bool): Wether or not max_degree should be a sparse
+            dimension.
+
+    '''
+    def __init__(self, mol_tensors, sparse_max_atoms=True, sparse_max_degree=False):
+
+        self.sparse_max_atoms = sparse_max_atoms
+        self.sparse_max_degree = sparse_max_degree
+
+        (max_atoms, max_degree, num_atom_features, num_bond_features,
+         num_molecules) = mol_shapes_to_dims(mol_tensors)
+
+        # Set sparse dimension sizes to None
+        num_molecules = None
+        if sparse_max_atoms:
+            max_atoms = None
+        if sparse_max_degree:
+            max_degree = None
+
+        max_shapes = mol_dims_to_shapes(max_atoms, max_degree, num_atom_features,
+                                       num_bond_features)
+
+        # Convert into SparseTensors
+        atoms, bonds, edges = mol_tensors
+        atoms = SparseTensor.from_array(atoms, max_shape=max_shapes[0])
+        bonds = SparseTensor.from_array(bonds, max_shape=max_shapes[1])
+        edges = SparseTensor.from_array(edges, max_shape=max_shapes[2], default_value=-1)
+
+        # Initialise with result
+        super(GraphTensor, self).__init__([atoms, bonds, edges])
+
+    def __getitem__(self, keys):
+
+        # Make sure we don't lose the num_molecules dimension
+        if isinstance(keys, int):
+            keys = [keys]
+
+        # Get each sliced tensor as a new `SparseTensor` object
+        sliced_tensors = [t[keys] for t in self.tensors]
+
+        # Make sure that max_atoms and max_degree match across all tensors,
+        #   (for isolated nodes (atoms), this is not always the case)
+        # Use the max value across all tensors
+        max_atoms_vals = [t.shape[1] for t in sliced_tensors]
+        max_degree_vals = [t.shape[2] for t in sliced_tensors[1:]]
+
+        max_atoms = max(max_atoms_vals)
+        max_degree = max(max_degree_vals)
+
+        # Return tensors with the matching shapes
+        shapes = mol_dims_to_shapes(max_atoms, max_degree, None, None)
+        return [t.as_array(shape) for t, shape in zip(sliced_tensors, shapes)]
+
+    @property
+    def max_shape(self):
+        return [t.max_shape for t in self.tensors]
+
+    @property
+    def true_shape(self):
+        return [t.max_shape for t in self.tensors]
+
+class EpochIterator(object):
+    ''' Iterates over a dataset. (designed for keras fit_generator)
+
+    # Arguments:
+        data (tuple): Tuple of data to iterate trough, usually `(x_data, y_data)`,
+            though a tuple of any length can be passed. The iterables inside the
+            tuple should support list-indexing.
+        batch_size (int): Number of datapoints yielded per batch
+        epochs (int/None): maximum number of epochs after which a `StopIteration`
+            is raised (None for infinite generator)
+        shuffle (bool): Wether to shuffle at the onset of each epoch
+
+    # Yields
+        batch (tuple): tuple corresponding to the `data` tuple that contains a
+            slice of length `batch_size` (except possibly on last batch of epoch)
+
+    # Example
+        using `keras.models.model`
+        >>> model.fit_generator(EpochIterator(np.array(zip(data, labels)))
+
+    # Note
+        designed for use with keras `model.fit_generator`
+    '''
+    def __init__(self, data, batch_size=1, epochs=None, shuffle=True):
+        self.data = TensorList(data)
+        self.epochs = epochs or np.inf
+        self.batch_size = batch_size
+        self.shuffle = shuffle
+
+        # Initialise counters
+        self.reset()
+
+    def __iter__(self):
+        return self
+
+    def next(self):
+        # At the end of an epoch, raise Stopiteration, or reset counter
+        if self.i >= len(self.data):
+            if self.epoch >= self.epochs:
+                raise StopIteration
+            else:
+                self.i = 0
+                self.epoch += 1
+
+        # At the begin of an epoch, shuffle the order of the data
+        if self.i==0 and self.shuffle:
+            np.random.shuffle(self.indices)
+
+        # Get the indices for this batch, and update counter i
+        use_inds = self.indices[self.i:self.i+self.batch_size]
+        self.i += len(use_inds)
+
+        # Return as tuple
+        return tuple(self.data[use_inds])
+
+    def reset(self):
+        ''' Resets the counters of the iterator
+        '''
+        self.i = 0
+        self.epoch = 1
+        self.indices = range(len(self.data))
+
+    def __reduce__(self):
+        return (type(self), (self.data.tensors, self.batch_size, self.epochs, self.shuffle))
 
 
-def unit_tests(seed=None):
+def unit_tests_sparse_tensor(seed=None):
 
     np.random.seed(seed)
 
-    arr = np.random.randint(3, size=(50,30,5,8))
+    arr = np.random.randint(3, size=(2000,30,5,8))
     sparse = SparseTensor.from_array(arr)
 
     singleton_shape = arr.shape[1:]
@@ -443,183 +642,111 @@ def unit_tests(seed=None):
     assert np.all(pkl.loads(pkl.dumps(sparse)) == sparse)
     assert np.all(pkl.loads(pkl.dumps(sparse)) == sparse.as_array())
 
+def unit_tests_graph_tensor(seed=None):
+    np.random.seed(seed)
+
+    # Parameters for generative model
+    num_molecules=50
+    max_atoms = 40
+    max_degree = 6
+    num_atom_features = 62
+    num_bond_features = 8
+
+    # Generate/simulate graph tensors
+    atoms = np.zeros((num_molecules, max_atoms, num_atom_features))
+    bonds = np.zeros((num_molecules, max_atoms, max_degree, num_bond_features))
+    edges = np.zeros((num_molecules, max_atoms, max_degree)) -1
+
+    # Generate atoms for each molecule
+    for i, n_atoms in  enumerate(np.random.randint(1, max_atoms, size=num_molecules)):
+        atoms[i, 0:n_atoms, :] = np.random.randint(3, size=(n_atoms, num_atom_features))
+
+        # Generator neighbours/bonds for each atom
+        for a, degree in enumerate(np.random.randint(max_degree, size=n_atoms)):
+            bonds[i, a, 0:degree, :] = np.random.randint(3, size=(degree, num_bond_features))
+            edges[i, a, 0:degree] = np.random.randint(max_degree, size=degree)
+
+    mols = GraphTensor([atoms, bonds, edges], sparse_max_atoms=True,
+                       sparse_max_degree=True)
+
+    max_atoms_sizes = set([])
+    max_degree_sizes = set([])
+    num_atom_features_sizes = set([])
+    num_bond_features_sizes = set([])
+    num_molecules_sizes = set([])
+
+    for i in range(len(mols)):
+        # This asserts the shapes match within the tensors
+        (max_atoms, max_degree, num_atom_features, num_bond_features,
+         num_molecules) = mol_shapes_to_dims(mols[i])
+
+        max_atoms_sizes.add(max_atoms)
+        max_degree_sizes.add(max_degree)
+        num_atom_features_sizes.add(num_atom_features)
+        num_bond_features_sizes.add(num_bond_features)
+        num_molecules_sizes.add(num_molecules)
+
+    print('Testing: max_atoms is varying in size')
+    assert len(max_atoms_sizes) > 1
+
+    print('Testing: max_degree is varying in size')
+    assert len(max_degree_sizes) > 1
+
+    print('Testing: num_atom_features is constant in size')
+    assert len(num_atom_features_sizes) == 1
+
+    print('Testing: num_bond_features is constant in size')
+    assert len(num_bond_features_sizes) == 1
+
+    print('Testing: num_molecules is constant in size')
+    assert len(num_molecules_sizes) == 1
+
+def unit_test_epoch_iterator(seed=None):
+
+    np.random.seed(seed)
+
+    n_datapoints = 50
+    batch_size = 13
+    epochs = 100
+
+    x_data = np.random.rand(n_datapoints, 3, 6, 2)
+    y_data = np.random.rand(n_datapoints, 8)
+
+    it = EpochIterator((x_data, y_data), epochs=epochs, batch_size=batch_size)
+
+    x_lengths = []
+    y_lengths = []
+    epochs = []
+    for x, y in it:
+        x_lengths.append(len(x))
+        y_lengths.append(len(y))
+        epochs.append(it.epoch)
+
+    x_lengths = np.array(x_lengths)
+    y_lengths = np.array(y_lengths)
+
+    seen = x_lengths.cumsum()
+    true_epoch1 = np.floor(seen / n_datapoints).astype(int)
+    true_epoch2 = np.array([0] + list(true_epoch1[:-1]))
+    iter_epochs = np.array(epochs) - epochs[0]
+
+    print('Testing: x and y lengths match')
+    assert np.all(x_lengths == y_lengths)
+
+    print('Testing: epoch are correct size')
+    assert np.all(iter_epochs == true_epoch1) or np.all(iter_epochs == true_epoch2)
+
+
+def unit_tests(seed=None):
+    print("\n{:=^100}".format(' Unit tests for `SparseTensor` '))
+    unit_tests_sparse_tensor(seed=seed)
+
+    print("\n{:=^100}".format('  Unit tests for `GraphTensor`  '))
+    unit_tests_graph_tensor(seed=seed)
+
+    print("\n{:=^100}".format('  Unit tests for `EpochIterator`  '))
+    unit_test_epoch_iterator(seed=seed)
     print('All unit tests passed!')
-
-class TensorList(object):
-    ''' Helperclass to cluster tensors together, acts as a single list by propageting
-    calls and slicing trough it's members.
-
-    # Arguments:
-        tensors (list of iterables): Should have the same length
-
-    # Example:
-        ```
-        >>> tensors = TensorList([np.zeros((5,4)), np.ones((5,2,2)), -np.ones((5,))])
-        >>> tensors.shape
-        [(5, 4), (5, 2, 2), (5,)]
-        >>> tensors[0:1]
-        [array([[ 0.,  0.,  0.,  0.]]), array([[[ 1.,  1.], [ 1.,  1.]]]), array([-1.])]
-        ```
-    '''
-
-    def __init__(self, tensors):
-        lengths = set([len(t) for t in tensors])
-        assert len(lengths) == 1, 'Length of all tensors should be the same'
-        self.length = list(lengths)[0]
-        self.tensors = tensors
-
-    def map(self, fn):
-        ''' Apply function to all tensors and return result
-        '''
-        return [fn(t) for t in self.tensors]
-
-    def apply(self, fn):
-        ''' Apply function to all tensors and replace with
-        '''
-        self.tensors = self.map(fn)
-
-    def __getitem__(self, key):
-        return [t[key] for t in self.tensors]
-
-    @property
-    def shape(self):
-        return [t.shape for t in self.tensors]
-
-    def __repr__(self):
-        return "%s(tensors=%r)" % (self.__class__.__name__, self.tensors)
-
-    def __len__(self):
-        return self.length
-
-    def __reduce__(self):
-        return (type(self), (self.tensors, ))
-
-
-class SparseTensorList(TensorList):
-    ''' Same as `Tensorlist`, but enforces all `tensors` to be `SparseTensors`
-
-    # Arguments:
-        tensors (list of iterables): as in `TensorList`
-        sparse_tensor_params: keyword arguments dict used when initialising
-            the `SparseTensor`s
-
-    '''
-    def __init__(self, tensors, sparse_tensor_params={}):
-        for i, tensor in enumerate(tensors):
-            if not isinstance(tensor, SparseTensor):
-                tensors[i] = SparseTensor.from_array(tensor, **sparse_tensor_params)
-
-        super(SparseTensorList, self).__init__(tensors)
-
-class EpochIterator(object):
-    ''' Iterates over a dataset.
-
-    # Arguments:
-        data (iterable): data to iterate trough. The iterator will use list-indexing
-            to retrieve batches from the data, so the data should support list-indexing
-        batch_size (int): Number of datapoints yielded per batch
-        shuffle (bool): Wether to shuffle at the onset of each epoch
-        epochs (int/None): maximum number of epochs after which a `StopIteration`
-            is raised (None for infinite generator)
-        as_tuple (bool): Wether or not to call `tuple(result)` on the result returned
-            on each iteration. This is actually required for the iterator to work
-            for keras models.
-
-    # Yields
-        batch (iterable): a slice of `data` of length `batch_size` (except
-            possibly on last batch of epoch)
-
-    # Example
-        using `keras.models.model`
-        >>> model.fit_generator(EpochIterator(np.array(zip(data, labels)))
-
-    # Note
-        designed for use with keras `model.fit_generator`
-    '''
-    def __init__(self, data, batch_size=1, epochs=None, shuffle=True, as_tuple=True):
-        self.data = data
-        self.epochs = epochs or np.inf
-        self.batch_size = batch_size
-        self.shuffle = shuffle
-
-        self.as_tuple = as_tuple
-
-        # Initialise counters
-        self.reset()
-
-    def __iter__(self):
-        return self
-
-    def next(self):
-        # At the end of an epoch, raise Stopiteration, or reset counter
-        if self.i >= len(self.data):
-            if self.epoch >= self.epochs:
-                raise StopIteration
-            else:
-                self.i = 0
-                self.epoch += 1
-
-        # At the begin of an epoch, shuffle the order of the data
-        if self.i==0 and self.shuffle:
-            np.random.shuffle(self.indices)
-
-        # Get the indices for this batch, and update counter i
-        use_inds = self.indices[self.i:self.i+self.batch_size]
-        self.i += len(use_inds)
-
-        # Because Keras requires a tuple
-        if self.as_tuple:
-            return tuple(self.data[use_inds])
-        else:
-            return self.data[use_inds]
-
-    def reset(self):
-        ''' Resets the counters of the iterator
-        '''
-        self.i = 0
-        self.epoch = 1
-        self.indices = range(len(self.data))
-
-    def __reduce__(self):
-        return (type(self), (self.data, self.batch_size, self.epochs, self.shuffle))
-
-
-def example(simple=True):
-    print('Some examples for tensor lists and iterator')
-
-    if simple:
-        atoms = np.array(range(10))
-        bonds = np.array(range(10, 20))
-        edges = np.array(range(20, 30))
-
-        labels = np.array(range(0, -10, -1))
-        batch_size = 3
-    else:
-        atoms = np.random.randint(3, size=(50,30,62))
-        bonds = np.random.randint(3, size=(50,30,5,5))
-        edges = np.random.randint(3, size=(50,30,5,8))
-
-        labels = np.random.rand(50)
-        batch_size = 25
-
-    mols = SparseTensorList([atoms, bonds, edges], {'return_array': True})
-    data = TensorList([mols, labels])
-    it = EpochIterator(data, epochs=100, batch_size=batch_size)
-
-    for (a, b, e), l in it:
-        print('it', it.i, it.epoch, it.epochs, len(it.data))
-        print('a', a.shape)
-        print('b', b.shape)
-        print('e', e.shape)
-        print()
-        print('l', l.shape)
-        print()
-        lens = [len(a),len(b),len(e)]
-        print(lens)
-        assert len(set(lens))==1
-
 
 if __name__ == '__main__':
     unit_tests()
-    # example()
-
