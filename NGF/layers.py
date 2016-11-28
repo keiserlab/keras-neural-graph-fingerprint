@@ -465,8 +465,8 @@ class AtomwiseDropout(layers.Layer):
         return None
 
     def call(self, inputs, mask=None):
-        # Import dimensions
-        _, max_atoms, num_atom_features = inputs._keras_shape
+        # Import (symbolic) dimensions
+        max_atoms = K.shape(inputs)[1]
 
         # By [farizrahman4u](https://github.com/fchollet/keras/issues/3995)
         ones = layers.Lambda(lambda x: (x * 0 + 1)[:, 0, :], output_shape=lambda s: (s[0], s[2]))(inputs)

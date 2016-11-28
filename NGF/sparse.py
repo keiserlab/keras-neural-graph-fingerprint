@@ -195,32 +195,46 @@ class SparseTensor(object):
                 to the requested keys
         '''
 
-        if not isinstance(keys, (int, tuple, list, slice, np.ndarray)):
-            raise ValueError
-
+        # Ensure keys is of usable type
         if isinstance(keys, slice):
             start, stop, step = keys.indices(len(self))
             keys = range(start, stop, step)
+        if isinstance(keys, (tuple, list, np.ndarray)):
+            if len(keys) == 0:
+                raise IndexError('Cannot index `SparseTensor` with empty slice (`[]`)')
+            else:
+                assert isinstance(keys[0], int), 'Indexing is only allowed along the main axis ({})'.format(self.main_axis)
+        elif isinstance(keys, int):
+            pass
+        else:
+            raise IndexError('Only int, list, np.ndarray or slice (`:`) allowed for indexing `SparseTensor`')
 
-        assert isinstance(keys, int) or isinstance(keys[0], int), 'Indexing is only allowed along the main axis ({})'.format(self.main_axis)
 
+        assert isinstance(keys, int) or isinstance(keys[0], int)
+
+        # Copy properties of self to be passed to child object (make them mutatable)
         indices, values = self._nonsparse_entries(keys)
+        max_shape = list(self.max_shape)
+        main_axis = int(self.main_axis)
 
+        # If getting a single element, drop singleton dimension
         if isinstance(keys, int):
-            #Drop singleton dimension
-            indices.pop(self.main_axis)
+            indices.pop(main_axis)
+            max_shape.pop(main_axis)
+            # Determining the new main axis is actually a trivial decision
+            main_axis = min(main_axis, len(max_shape)-1)
 
         tensor = self.__class__(dtype=self.dtype,
                                 nonsparse_indices=indices, nonsparse_values=values,
-                                main_axis=self.main_axis, default_value=self.default_value,
-                                max_shape=self.max_shape, return_array=self.return_array)
+                                main_axis=main_axis, default_value=self.default_value,
+                                max_shape=max_shape, return_array=self.return_array)
 
         # If returning as array, max sure to return an array with the same length
         #   as keys. (When keys has 0-entries at it's end, they will be removed
         #   in `tensor`
         if self.return_array:
-            max_shape = list(self.max_shape)
-            max_shape[self.main_axis] = len(keys)
+            if not isinstance(keys, int):
+                max_shape[main_axis] = len(keys)
             return tensor.as_array(max_shape)
         else:
             return tensor
@@ -279,7 +293,7 @@ class SparseTensor(object):
             default_value (of same dtype): The nonsparse value to filter out
 
         # Returns:
-            tensor (selfDataTensor): S.t. `tensor.as_array(arr.shape) == arr`
+            tensor (SparseTensor): s.t. `tensor.as_array(arr.shape) == arr`
 
         '''
 
@@ -288,13 +302,13 @@ class SparseTensor(object):
         nonsparse_indices = list(np.where(arr != default_value))
         nonsparse_values = arr[nonsparse_indices]
 
-        # Assume_sorted is main_axis=0 because of np.where
+        # Assume_sorted if main_axis=0 because of np.where
         assume_sorted = main_axis==0
 
         return cls(dtype=arr.dtype, nonsparse_indices=nonsparse_indices,
                    nonsparse_values=nonsparse_values, main_axis=0,
                    max_shape=max_shape, return_array=return_array,
-                   assume_sorted=assume_sorted)
+                   default_value=default_value, assume_sorted=assume_sorted)
 
 
     def as_array(self, shape=None):
@@ -322,7 +336,7 @@ class SparseTensor(object):
         # Overwrite None with self.shape
         shape = [true_s if s==None else s for s, true_s in zip(shape, self.shape)]
         # Check if obtained shape matches with self.true_shape
-        assert np.all([s >=true_s for s, true_s in zip(shape, self.true_shape)])
+        assert np.all([s >=true_s for s, true_s in zip(shape, self.true_shape)]), 'shape ({}) should be at least {}'.format(shape, self.true_shape)
 
         out = np.zeros(shape, dtype=self.dtype)
         out.fill(self.default_value)
