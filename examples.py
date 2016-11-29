@@ -139,4 +139,4 @@ X_mols = GraphTensor([X_atoms, X_bonds, X_edges])
 
 # Build a generator and train the model
 my_generator = EpochIterator((X_mols, labels), batch_size=128)
-model4.fit_generator(my_generator, nb_epoch=20, samples_per_epoch=len(labels), pickle_safe=True)
+model4.fit_generator(my_generator, nb_epoch=20, samples_per_epoch=len(labels))

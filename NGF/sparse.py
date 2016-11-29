@@ -260,12 +260,6 @@ class SparseTensor(object):
     def __ne__(self, other):
         return np.invert(self == other)
 
-    def __reduce__(self):
-        assume_sorted = True
-        return (type(self), (self.nonsparse_indices, self.nonsparse_values,
-                self.default_value, self.max_shape, self.dtype, self.main_axis,
-                assume_sorted))
-
     # Export and import functionality
     @classmethod
     def from_array(cls, arr, dtype=None, main_axis=0, default_value=0,
@@ -407,9 +401,6 @@ class TensorList(object):
     def __len__(self):
         return self.length
 
-    def __reduce__(self):
-        return (type(self), (self.tensors, ))
-
 class GraphTensor(TensorList):
     ''' Datacontainer for (molecular) graph tensors.
 
@@ -548,9 +539,6 @@ class EpochIterator(object):
         self.i = 0
         self.epoch = 1
         self.indices = range(len(self.data))
-
-    def __reduce__(self):
-        return (type(self), (self.data.tensors, self.batch_size, self.epochs, self.shuffle))
 
 
 def unit_tests_sparse_tensor(seed=None):
