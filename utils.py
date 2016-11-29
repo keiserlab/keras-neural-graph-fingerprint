@@ -1,4 +1,8 @@
-# Imported from https://github.com/GUR9000/KerasNeuralFingerprint/blob/master/KerasNeuralfingerprint/utils.py
+''' Utilities for loading the sample data
+
+# Source
+Imported from https://github.com/GUR9000/KerasNeuralFingerprint/blob/master/KerasNeuralfingerprint/utils.py
+'''
 
 from __future__ import print_function
 
@@ -53,7 +57,7 @@ def load_delaney(file = 'data/delaney.csv', target_name = 'measured log solubili
     data, labels = permute_data(_alldata[0], _alldata[1], FixSeed=12345)
     assert len(data)==len(labels)
     return data, labels
-        
+
 def load_Karthikeyan_MeltingPoints(file = 'data/Melting_Points_(Karthikeyan).txt', target_name='MTP'):
     '''
     returns: data, labels

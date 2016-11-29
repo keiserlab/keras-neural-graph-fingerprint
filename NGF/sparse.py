@@ -1,3 +1,6 @@
+''' Classes for sparse vectors, lists of related tensors and tensors describing
+molecular graphs
+'''
 from __future__ import division, print_function, absolute_import
 
 import numpy as np

@@ -1,3 +1,5 @@
+''' Code to generate graph tensor features for molecules (in SMILES form)
+'''
 from __future__ import division, print_function
 from functools import partial
 from multiprocessing import cpu_count, Pool
@@ -7,7 +9,7 @@ import numpy as np
 from rdkit import Chem
 from keras.utils.generic_utils import Progbar
 
-import features
+from . import features
 
 def padaxis(array, new_size, axis, pad_value=0, pad_right=True):
     ''' Padds one axis of an array to a new size

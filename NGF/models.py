@@ -1,3 +1,5 @@
+''' Defines functions to automate construction of complex neural graph networks.
+'''
 from __future__ import division, print_function, absolute_import
 
 from keras.regularizers import l1l2

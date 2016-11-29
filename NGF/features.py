@@ -1,5 +1,11 @@
-# Imported from https://github.com/HIPS/neural-fingerprint/blob/master/neuralfingerprint/features.py
-#           and https://github.com/HIPS/neural-fingerprint/blob/master/neuralfingerprint/util.py
+''' Generate features vectors for atoms and bonds
+
+# Source
+This code is adapted from
+    - https://github.com/HIPS/neural-fingerprint/blob/master/neuralfingerprint/features.py
+    - https://github.com/HIPS/neural-fingerprint/blob/master/neuralfingerprint/util.py
+'''
+
 import numpy as np
 from rdkit import Chem
 

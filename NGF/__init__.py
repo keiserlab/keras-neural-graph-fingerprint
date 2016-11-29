@@ -1,1 +1,1 @@
-__all__ = ['layers', 'models', 'preprocessing']
+__all__ = ['layers', 'models', 'preprocessing', 'sparse']

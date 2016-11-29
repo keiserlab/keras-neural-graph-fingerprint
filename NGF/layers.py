@@ -1,13 +1,14 @@
+''' Defines layers to build convolutional graph networks.
+'''
+
 from __future__ import print_function
 
 from keras import layers
 from keras.utils.layer_utils import layer_from_config
-from utils import filter_func_args, mol_shapes_to_dims
-
-
+import theano
 import keras.backend as K
 
-import theano
+from .utils import filter_func_args, mol_shapes_to_dims
 
 # TODO: Rewrite this function to Keras and drop theano dependency
 def parallel_gather(references, indices):
