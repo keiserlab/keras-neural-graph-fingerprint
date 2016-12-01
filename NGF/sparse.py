@@ -470,7 +470,7 @@ class GraphTensor(TensorList):
         max_degree = max(max_degree_vals)
 
         # Return tensors with the matching shapes
-        shapes = mol_dims_to_shapes(max_atoms, max_degree, None, None)
+        shapes = mol_dims_to_shapes(max_atoms, max_degree, None, None, len(keys))
         return [t.as_array(shape) for t, shape in zip(sliced_tensors, shapes)]
 
     @property
