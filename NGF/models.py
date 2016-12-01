@@ -202,10 +202,13 @@ def build_graph_conv_net(data_input,
 		if conv_dropout:
 			atoms_in = ConvDropout(conv_dropout)(atoms_in)
 
-		atoms_out = NeuralGraphHidden(Dense(conv_size, activation=conv_activation,
-											bias=conv_bias, W_regularizer=l1l2(conv_l1, conv_l2),
-											b_regularizer=l1l2(conv_l1, conv_l2),
-											**conv_kwargs))([atoms_in, bonds, edges])
+		# Use inner_layer_fn init method of `NeuralGraphHidden`, because it is
+		# 	the most powerfull (e.g. allows custom activation functions)
+		def inner_layer_fn():
+			return Dense(conv_size, activation=conv_activation, bias=conv_bias,
+						 W_regularizer=l1l2(conv_l1, conv_l2),
+						 b_regularizer=l1l2(conv_l1, conv_l2), **conv_kwargs)
+		atoms_out = NeuralGraphHidden(inner_layer_fn)([atoms_in, bonds, edges])
 		# Export
 		convolved_atoms.append(atoms_out)
 
