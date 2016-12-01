@@ -5,20 +5,63 @@ from __future__ import print_function
 
 from keras import layers
 from keras.utils.layer_utils import layer_from_config
-import theano
+import theano.tensor as T
 import keras.backend as K
 
 from .utils import filter_func_args, mol_shapes_to_dims
 
-# TODO: Rewrite this function to Keras and drop theano dependency
-def parallel_gather(references, indices):
+def neighbour_lookup(atoms, edges):
+    ''' Looks up the features of an all atoms neighbours, for a batch of molecules.
+
+    # Arguments:
+        atoms (K.tensor): of shape (batch_n, max_atoms, num_atom_features)
+        edges (K.tensor): of shape (batch_n, max_atoms, max_degree) with neighbour indices,
+            and -1 as padding value
+
+    # Returns:
+        neigbour_features (K.tensor): of shape (batch_n, max_atoms, max_degree,
+            num_atom_features) with 0 as padding value
+
+    # Todo:
+        - make this function compatible with Tensorflow, it should be quite trivial
+            because there is an equivalent of `T.arange` in tensorflow.
     '''
-    Executes theano index (i.e. K.gather()) for each sample in a batch, usefull
-    when dealing with Tensor of dim > 2D
-    '''
-    result, _ = theano.scan(fn=lambda reference, indices:reference[indices],
-        outputs_info=None, sequences=[references, indices])
-    return result
+
+    # The lookup masking trick: We add 1 to all indices, converting the
+    #   masking value of -1 to a valid 0 index.
+    masked_edges = edges + 1
+    # We then add a zerovector to the left of the lookup matrix,
+    # note: this keras adds a zero vector to the left AND right, but that is
+    #   okay for now
+    masked_atoms = K.temporal_padding(atoms, padding=1)
+
+
+    # (batch_n, lookup_size, num_atom_features)
+    atoms_shape = K.shape(masked_atoms)
+    batch_n = atoms_shape[0]
+    lookup_size = atoms_shape[1]
+    num_atom_features = atoms_shape[2]
+
+    edges_shape = K.shape(masked_edges)
+    max_atoms = edges_shape[1]
+    max_degree = edges_shape[2]
+
+    # create broadcastable offset
+    offset_shape = (batch_n, 1, 1)
+    offset = K.reshape(T.arange(batch_n, dtype=K.dtype(masked_edges)), offset_shape)
+    offset *= lookup_size
+
+    # apply offset to account for the fact that after reshape, all individual
+    #   batch_n indices will be combined into a single big index
+    flattened_atoms = K.reshape(masked_atoms, (-1, num_atom_features))
+    flattened_edges = K.reshape(masked_edges + offset, (batch_n, -1))
+
+    # Gather flattened
+    flattened_result = K.gather(flattened_atoms, flattened_edges)
+
+    # Return unflattened result
+    output_shape = (batch_n, max_atoms, max_degree, num_atom_features)
+    return T.reshape(flattened_result, output_shape)
 
 class NeuralGraphHidden(layers.Layer):
     ''' Hidden Convolutional layer in a Neural Graph (as in Duvenaud et. al.,
@@ -158,16 +201,8 @@ class NeuralGraphHidden(layers.Layer):
         # Create a matrix that stores for each atom, the degree it is
         atom_degrees = K.sum(K.not_equal(edges, -1), axis=-1, keepdims=True)
 
-        # The lookup masking trick: We add 1 to all indices, converting the
-        #   masking value of -1 to a valid 0 index.
-        masked_edges = edges + 1
-        # We then add a zerovector to the left of the lookup matrix,
-        # note: this keras adds a zero vector to the left AND right, but that is
-        #   okay for now
-        masked_atom_features_lookup = K.temporal_padding(atoms, padding=1)
-
-        # For each atom, look up the featues of it's neighbour
-        neighbour_atom_features = parallel_gather(masked_atom_features_lookup, masked_edges)
+        # For each atom, look up the features of it's neighbour
+        neighbour_atom_features = neighbour_lookup(atoms, edges)
 
         # Sum along degree axis to get summed neighbour features, also add the self
         summed_atom_features = K.sum(neighbour_atom_features, axis=-2) + atoms
@@ -405,6 +440,7 @@ class NeuralGraphOutput(layers.Layer):
         config['inner_layer_config'] = { 'config': inner_layer.get_config(),
                                         'class_name': inner_layer.__class__.__name__}
         return config
+
 
 class AtomwiseDropout(layers.Layer):
     ''' Performs dropout over an atom feature vector where each atom will get
