@@ -3,6 +3,8 @@
 
 from __future__ import print_function
 
+from numpy import inf, ndarray
+
 from keras import layers
 from keras.utils.layer_utils import layer_from_config
 import theano.tensor as T
@@ -10,17 +12,46 @@ import keras.backend as K
 
 from .utils import filter_func_args, mol_shapes_to_dims
 
-def neighbour_lookup(atoms, edges):
+def temporal_padding(x, paddings=(1, 0), padvalue=0):
+    '''Pad the middle dimension of a 3D tensor
+    with `padding[0]` values left and `padding[1]` values right.
+
+    Modified from keras.backend.temporal_padding
+    https://github.com/fchollet/keras/blob/3bf913d/keras/backend/theano_backend.py#L590
+
+    TODO: Implement for tensorflow (supposebly more easy)
+    '''
+    if not isinstance(paddings, (tuple, list, ndarray)):
+        paddings = (paddings, paddings)
+
+    input_shape = x.shape
+    output_shape = (input_shape[0],
+                    input_shape[1] + sum(paddings),
+                    input_shape[2])
+    output = T.zeros(output_shape)
+
+    # Set pad value and set subtensor of actual tensor
+    output = T.set_subtensor(output[:, :paddings[0], :], padvalue)
+    output = T.set_subtensor(output[:, paddings[1]:, :], padvalue)
+    output = T.set_subtensor(output[:, paddings[0]:x.shape[1] + paddings[0], :], x)
+    return output
+
+def neighbour_lookup(atoms, edges, maskvalue=0, include_self=False):
     ''' Looks up the features of an all atoms neighbours, for a batch of molecules.
 
     # Arguments:
         atoms (K.tensor): of shape (batch_n, max_atoms, num_atom_features)
-        edges (K.tensor): of shape (batch_n, max_atoms, max_degree) with neighbour indices,
-            and -1 as padding value
+        edges (K.tensor): of shape (batch_n, max_atoms, max_degree) with neighbour
+            indices and -1 as padding value
+        maskvalue (numerical): the maskingvalue that should be used for empty atoms
+            or atoms that have no neighbours (does not affect the input maskvalue
+            which should always be -1!)
+        include_self (bool): if True, the featurevector of each atom will be added
+            to the list feature vectors of its neighbours
 
     # Returns:
-        neigbour_features (K.tensor): of shape (batch_n, max_atoms, max_degree,
-            num_atom_features) with 0 as padding value
+        neigbour_features (K.tensor): of shape (batch_n, max_atoms(+1), max_degree,
+            num_atom_features) depending on the value of include_self
 
     # Todo:
         - make this function compatible with Tensorflow, it should be quite trivial
@@ -30,13 +61,12 @@ def neighbour_lookup(atoms, edges):
     # The lookup masking trick: We add 1 to all indices, converting the
     #   masking value of -1 to a valid 0 index.
     masked_edges = edges + 1
-    # We then add a zerovector to the left of the lookup matrix,
-    # note: this keras adds a zero vector to the left AND right, but that is
-    #   okay for now
-    masked_atoms = K.temporal_padding(atoms, padding=1)
+    # We then add a padding vector at index 0 by padding to the left of the
+    #   lookup matrix with the value that the new mask should get
+    masked_atoms = temporal_padding(atoms, (1,0), padvalue=maskvalue)
 
 
-    # (batch_n, lookup_size, num_atom_features)
+    # Import dimensions
     atoms_shape = K.shape(masked_atoms)
     batch_n = atoms_shape[0]
     lookup_size = atoms_shape[1]
@@ -59,9 +89,13 @@ def neighbour_lookup(atoms, edges):
     # Gather flattened
     flattened_result = K.gather(flattened_atoms, flattened_edges)
 
-    # Return unflattened result
+    # Unflatten result
     output_shape = (batch_n, max_atoms, max_degree, num_atom_features)
-    return T.reshape(flattened_result, output_shape)
+    output = T.reshape(flattened_result, output_shape)
+
+    if include_self:
+        return K.concatenate([K.expand_dims(atoms, dim=2), output], axis=2)
+    return output
 
 class NeuralGraphHidden(layers.Layer):
     ''' Hidden Convolutional layer in a Neural Graph (as in Duvenaud et. al.,
@@ -202,10 +236,10 @@ class NeuralGraphHidden(layers.Layer):
         atom_degrees = K.sum(K.not_equal(edges, -1), axis=-1, keepdims=True)
 
         # For each atom, look up the features of it's neighbour
-        neighbour_atom_features = neighbour_lookup(atoms, edges)
+        neighbour_atom_features = neighbour_lookup(atoms, edges, include_self=True)
 
-        # Sum along degree axis to get summed neighbour features, also add the self
-        summed_atom_features = K.sum(neighbour_atom_features, axis=-2) + atoms
+        # Sum along degree axis to get summed neighbour features
+        summed_atom_features = K.sum(neighbour_atom_features, axis=-2)
 
         # Sum the edge features for each atom
         summed_bond_features = K.sum(bonds, axis=-2)
@@ -440,6 +474,43 @@ class NeuralGraphOutput(layers.Layer):
         config['inner_layer_config'] = { 'config': inner_layer.get_config(),
                                         'class_name': inner_layer.__class__.__name__}
         return config
+
+class NeuralGraphPool(layers.Layer):
+    ''' Pooling layer in a Neural graph, for each atom, takes the max for each
+    feature between the atom and it's neighbours
+
+    # Input shape
+        List of Atom and edge tensors of shape:
+        `[(samples, max_atoms, atom_features), (samples, max_atoms, max_degrees,
+          bond_features), (samples, max_atoms, max_degrees)]`
+        where degrees referes to number of neighbours
+
+    # Output shape
+        New atom features (of same shape:)
+        `(samples, max_atoms, atom_features)`
+    '''
+    def __init__(self, **kwargs):
+        super(NeuralGraphPool, self).__init__(**kwargs)
+
+    def call(self, inputs, mask=None):
+        atoms, bonds, edges = inputs
+
+        # For each atom, look up the featues of it's neighbour
+        neighbour_atom_features = neighbour_lookup(atoms, edges, maskvalue=-inf,
+                                                   include_self=True)
+
+        # Take max along `degree` axis (2) to get max of neighbours and self
+        max_features = K.max(neighbour_atom_features, axis=2)
+
+        atom_degrees = K.sum(K.not_equal(edges, -1), axis=-1, keepdims=True)
+        general_atom_mask = K.cast(K.not_equal(atom_degrees, 0), K.floatx())
+
+        return max_features * general_atom_mask
+
+    def get_output_shape_for(self, inputs_shape):
+
+        # Only returns `atoms` tensor
+        return inputs_shape[0]
 
 
 class AtomwiseDropout(layers.Layer):

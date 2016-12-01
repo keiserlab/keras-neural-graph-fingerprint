@@ -6,7 +6,7 @@ from keras.regularizers import l1l2
 from keras.layers import Input, merge, Dense, Dropout, BatchNormalization
 from keras import models
 
-from .layers import NeuralGraphHidden, NeuralGraphOutput, AtomwiseDropout
+from .layers import NeuralGraphHidden, NeuralGraphOutput, NeuralGraphPool, AtomwiseDropout
 from .utils import zip_mixed, is_iterable
 
 def build_graph_conv_model(max_atoms, max_degree, num_atom_features,
@@ -70,7 +70,8 @@ def build_graph_conv_net(data_input,
 						 conv_dropout=0, fp_dropout=0, net_dropout=0,
 						 conv_batchnorm=0, fp_batchnorm=0, net_batchnorm=0,
 						 conv_kwargs={}, fp_kwargs={}, net_kwargs={},
-						 fp_merge_mode='sum', atomwise_dropout=True):
+						 fp_merge_mode='sum', atomwise_dropout=True,
+						 graphpool=False):
 	''' Builds a graph convolutional network with a regular neural network on
 		top.
 
@@ -118,6 +119,8 @@ def build_graph_conv_net(data_input,
 			each batch, this should be done because the weights are also shared
 			between atoms in each batch. But could be turned of to investigate its
 			effect
+		graphpool (bool): If True, apply graphpool after each hidden graphlayer,
+			can also be specified as a list
 
 	# Returns:
 		output (keras tensor): Ouput of final layer of network. Add a prediciton
@@ -135,7 +138,7 @@ def build_graph_conv_net(data_input,
 	# Merge all parameter into tuples for each layer
 	conv_layers = zip_mixed(conv_layer_sizes, conv_activation, conv_bias,
 							conv_l1, conv_l2, conv_dropout, conv_batchnorm,
-							conv_kwargs, repeat_classes=[dict, str])
+							conv_kwargs, graphpool, repeat_classes=[dict, str])
 	fp_layers = zip_mixed(fp_layer_sizes, fp_activation, fp_bias,
 							fp_l1, fp_l2, fp_dropout, fp_batchnorm,
 							fp_kwargs, repeat_classes=[dict, str])
@@ -191,7 +194,8 @@ def build_graph_conv_net(data_input,
 	for conv_layer, fp_layer in zip(conv_layers, fp_layers):
 
 		# Import parameters
-		conv_size, conv_activation, conv_bias, conv_l1, conv_l2, conv_dropout, conv_batchnorm, conv_kwargs = conv_layer
+		(conv_size, conv_activation, conv_bias, conv_l1, conv_l2, conv_dropout,
+		 conv_batchnorm, conv_kwargs, graphpool) = conv_layer
 		fp_size, fp_activation, fp_bias, fp_l1, fp_l2, fp_dropout, fp_batchnorm, fp_kwargs = fp_layer
 
 		# Add hidden layer
@@ -209,6 +213,10 @@ def build_graph_conv_net(data_input,
 						 W_regularizer=l1l2(conv_l1, conv_l2),
 						 b_regularizer=l1l2(conv_l1, conv_l2), **conv_kwargs)
 		atoms_out = NeuralGraphHidden(inner_layer_fn)([atoms_in, bonds, edges])
+
+		if graphpool:
+			atoms_out = NeuralGraphPool()([atoms_out, bonds, edges])
+
 		# Export
 		convolved_atoms.append(atoms_out)
 
