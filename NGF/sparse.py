@@ -73,7 +73,7 @@ class SparseTensor(object):
 
         # Convert indices and values to numpy array and check dimensionality
         for i, ind in enumerate(nonsparse_indices):
-            assert len(ind) == len(nonsparse_values)
+            assert len(ind) == len(nonsparse_values), 'nonsparse_indices (size{0} @index {1}) should be of same length as nonsparse_values (size {2})'.format(len(ind), i, len(nonsparse_values))
             nonsparse_indices[i] = np.array(ind, dtype='int')
             self.nonsparse_indices = nonsparse_indices
         self.nonsparse_values = np.array(nonsparse_values)
@@ -207,9 +207,6 @@ class SparseTensor(object):
             pass
         else:
             raise IndexError('Only int, list, np.ndarray or slice (`:`) allowed for indexing `SparseTensor`')
-
-
-        assert isinstance(keys, int) or isinstance(keys[0], int)
 
         # Copy properties of self to be passed to child object (make them mutatable)
         indices, values = self._nonsparse_entries(keys)

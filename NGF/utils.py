@@ -81,8 +81,12 @@ def mol_shapes_to_dims(mol_tensors=None, mol_shapes=None):
     num_molecules1, max_atoms1, max_degree1, num_bond_features = mol_shapes[1]
     num_molecules2, max_atoms2, max_degree2 = mol_shapes[2]
 
-    assert num_molecules0 == num_molecules1 == num_molecules2, 'num_molecules does not match within tensors'
-    assert max_atoms1 == max_atoms2, 'max_atoms does not match within tensors'
-    assert max_degree1 == max_degree2, 'max_degree does not match within tensors'
+    num_molecules_vals = [num_molecules0, num_molecules1, num_molecules2]
+    max_atoms_vals = [max_atoms0, max_atoms1, max_atoms2]
+    max_degree_vals = [max_degree1, max_degree2]
+
+    assert len(set(num_molecules_vals))==1, 'num_molecules does not match within tensors (found: {})'.format(num_molecules_vals)
+    assert len(set(max_atoms_vals))==1, 'max_atoms does not match within tensors (found: {})'.format(max_atoms_vals)
+    assert len(set(max_degree_vals))==1, 'max_degree does not match within tensors (found: {})'.format(max_degree_vals)
 
     return max_atoms1, max_degree1, num_atom_features, num_bond_features, num_molecules1
