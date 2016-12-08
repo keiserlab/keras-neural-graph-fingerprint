@@ -4,6 +4,7 @@
 from __future__ import print_function
 
 from numpy import inf, ndarray
+from copy import deepcopy
 
 from keras import layers
 from keras.utils.layer_utils import layer_from_config
@@ -174,10 +175,9 @@ class NeuralGraphHidden(layers.Layer):
             assert inner_layer_arg.built == False, 'When initialising with a keras layer, it cannot be built.'
             _, self.conv_width = inner_layer_arg.get_output_shape_for((None, None))
             # layer_from_config will mutate the config dict, therefore create a get fn
-            def get_inner_layer_config():
-                return { 'config': inner_layer_arg.get_config(),
-                                     'class_name': inner_layer_arg.__class__.__name__}
-            self.create_inner_layer_fn = lambda: layer_from_config(get_inner_layer_config())
+            self.create_inner_layer_fn = lambda: layer_from_config(dict(
+                                                    class_name=inner_layer_arg.__class__.__name__,
+                                                    config=inner_layer_arg.get_config()))
 
         # Case 3: Check if a function is provided that returns a initialised keras layer
         elif callable(inner_layer_arg):
@@ -282,7 +282,9 @@ class NeuralGraphHidden(layers.Layer):
     def from_config(cls, config):
         # Use layer build function to initialise new NeuralHiddenLayer
         inner_layer_config = config.pop('inner_layer_config')
-        create_inner_layer_fn = lambda: layer_from_config(inner_layer_config)
+        # create_inner_layer_fn = lambda: layer_from_config(inner_layer_config.copy())
+        def create_inner_layer_fn():
+            return layer_from_config(deepcopy(inner_layer_config))
 
         layer = cls(create_inner_layer_fn, **config)
         return layer
@@ -292,8 +294,8 @@ class NeuralGraphHidden(layers.Layer):
 
         # Store config of (a) inner layer of the 3D wrapper
         inner_layer = self.inner_3D_layers[0].layer
-        config['inner_layer_config'] = { 'config': inner_layer.get_config(),
-                                        'class_name': inner_layer.__class__.__name__}
+        config['inner_layer_config'] = dict(config=inner_layer.get_config(),
+                                            class_name=inner_layer.__class__.__name__)
         return config
 
 
@@ -461,7 +463,7 @@ class NeuralGraphOutput(layers.Layer):
     def from_config(cls, config):
         # Use layer build function to initialise new NeuralGraphOutput
         inner_layer_config = config.pop('inner_layer_config')
-        create_inner_layer_fn = lambda: layer_from_config(inner_layer_config)
+        create_inner_layer_fn = lambda: layer_from_config(deepcopy(inner_layer_config))
 
         layer = cls(create_inner_layer_fn, **config)
         return layer
@@ -471,8 +473,8 @@ class NeuralGraphOutput(layers.Layer):
 
         # Store config of inner layer of the 3D wrapper
         inner_layer = self.inner_3D_layer.layer
-        config['inner_layer_config'] = { 'config': inner_layer.get_config(),
-                                        'class_name': inner_layer.__class__.__name__}
+        config['inner_layer_config'] = dict(config=inner_layer.get_config(),
+                                            class_name=inner_layer.__class__.__name__)
         return config
 
 class NeuralGraphPool(layers.Layer):
