@@ -15,6 +15,7 @@ There are several implementations of this paper publicly available:
  - by [debbiemarkslab][2] using theano
  - by [GUR9000] [3] using keras
  - by [ericmjl][4] using autograd
+ - by [DeepChem][5] using tensorflow
 
 The closest implementation is the implementation by GUR9000 in Keras. However this
 repository represents moleculs in a fundamentally different way. The consequences
@@ -164,11 +165,11 @@ is no longer a dependency.
 - Feature extraction scripts were copied from [the original implementation][1]
 - Data preprocessing scripts were copied from [GRU2000][3]
 - The usage of the Keras functional API was inspired by [GRU2000][3]
-- The [keiserlab][keiserlab] for feedback and support
 
 [NGF-paper]: https://arxiv.org/abs/1509.09292
 [keiserlab]: //http://www.keiserlab.org/
 [1]: https://github.com/HIPS/neural-fingerprint
 [2]: https://github.com/debbiemarkslab/neural-fingerprint-theano
 [3]: https://github.com/GUR9000/KerasNeuralFingerprint
-[4]: https://github.com/ericmjl/graph-fingerprints
+[4]: https://github.com/ericmjl/graph-fingerprint
+[5]: https://github.com/deepchem/deepchem
