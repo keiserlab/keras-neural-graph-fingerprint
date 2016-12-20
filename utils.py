@@ -1,7 +1,12 @@
 ''' Utilities for loading the sample data
 
 # Source
-Imported from https://github.com/GUR9000/KerasNeuralFingerprint/blob/master/KerasNeuralfingerprint/utils.py
+Imported from https://github.com/GUR9000/KerasNeuralFingerprint/blob/8f50d80/KerasNeuralfingerprint/utils.py
+
+# Copyright
+This code is governed by the licence at:
+    https://github.com/GUR9000/KerasNeuralFingerprint/blob/8f50d80/license.txt
+which is copied to data/data.license.txt
 '''
 
 from __future__ import print_function

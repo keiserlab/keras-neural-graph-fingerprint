@@ -2,8 +2,13 @@
 
 # Source
 This code is adapted from
-    - https://github.com/HIPS/neural-fingerprint/blob/master/neuralfingerprint/features.py
-    - https://github.com/HIPS/neural-fingerprint/blob/master/neuralfingerprint/util.py
+    - https://github.com/HIPS/neural-fingerprint/blob/2e8ef09/neuralfingerprint/features.py
+    - https://github.com/HIPS/neural-fingerprint/blob/2e8ef09/neuralfingerprint/util.py
+
+# Copyright
+This code is governed by the licence at:
+    https://github.com/HIPS/neural-fingerprint/blob/2e8ef09/license.txt
+which is copied to ./features.license.txt
 '''
 
 import numpy as np
