@@ -96,7 +96,7 @@ vectors change at each iteration, so for higher layers only the `atom` tensor ne
 to be replaced by the convolved output of the previous `NeuralGraphHidden`.
 
 `NeuralGraphOutput` takes a set of molecules (represented by `[atoms, bonds, edges]`),
-and returns the fingerprint output for that layer. According to the [original paper](NGF-paper),
+and returns the fingerprint output for that layer. According to the [original paper][NGF-paper],
 the fingerprints of all layers need to be summed. But these are neural nets, so
 feel free to play around with the architectures!
 
@@ -141,13 +141,12 @@ Method 3. will work if a function is provided that returns a new `l2` object eac
 time it is called (as would be the case for the given lambda function).
 
 
-
 ## NeuralGraph models
 For convienience, two builder functions are included that can build a variety
 of Neural Graph models by specifiying it's parameters. See [NGF/models.py](NGF/models.py).
 
 The examples in [examples.py](examples.py) should help you along the way.
-
+NGF
 You can store and load the trained models. Make sure to specify the custom classes:
 ```python
 model = load_model('model.h5', custom_objects={'NeuralGraphHidden':NeuralGraphHidden, 'NeuralGraphOutput':NeuralGraphOutput})
@@ -165,8 +164,10 @@ is no longer a dependency.
 - Feature extraction scripts were copied from [the original implementation][1]
 - Data preprocessing scripts were copied from [GRU2000][3]
 - The usage of the Keras functional API was inspired by [GRU2000][3]
+- Graphpool layer adopted from [Han, et al., 2016][DeepChem-paper]
 
 [NGF-paper]: https://arxiv.org/abs/1509.09292
+[DeepChem-paper]:https://arxiv.org/abs/1611.03199
 [keiserlab]: //http://www.keiserlab.org/
 [1]: https://github.com/HIPS/neural-fingerprint
 [2]: https://github.com/debbiemarkslab/neural-fingerprint-theano
