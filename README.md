@@ -156,7 +156,7 @@ model = load_model('model.h5', custom_objects={'NeuralGraphHidden':NeuralGraphHi
 - [**RDKit**](http://www.rdkit.org/) This dependency is nescecairy to convert molecules into tensor
 representatins, once this step is conducted, the new data can be stored, and RDkit
 is no longer a dependency.
-- [**Keras**](https://keras.io/) For building, training and evaluating the models.
+- [**Keras**](https://keras.io/) Requires keras 1.x for building, training and evaluating the models.
 - [**NumPy**](http://www.numpy.org/)
 
 ## Acknowledgements
